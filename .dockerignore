@@ -1,0 +1,18 @@
+# Build context for deploy/Dockerfile (§15). README.md, pyproject.toml, uv.lock,
+# .python-version and src/ are deliberately NOT ignored — the image build needs them.
+.git
+.venv
+.pi
+tests
+__pycache__/
+*.py[cod]
+dist/
+*.egg-info/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.coverage
+.coverage.*
+.pytest_cache/
+.env
