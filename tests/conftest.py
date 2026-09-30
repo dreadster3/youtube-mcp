@@ -17,13 +17,16 @@ ENV_VARS = [
     "WEBSHARE_PROXY_PASSWORD",
     "HTTP_PROXY",
     "HTTPS_PROXY",
-    "http_proxy",
-    "https_proxy",
 ]
 
 
 @pytest.fixture
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Drop every config var so tests see the true defaults, not the host's env."""
+    """Drop every §12 config var so tests see the true defaults, not the host's env.
+
+    pydantic-settings matches env names case-insensitively, so a host-level lowercase
+    `youtube_api_key` would otherwise leak in — strip both spellings.
+    """
     for var in ENV_VARS:
-        monkeypatch.delenv(var, raising=False)
+        for spelling in (var, var.lower()):
+            monkeypatch.delenv(spelling, raising=False)

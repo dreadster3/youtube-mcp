@@ -24,6 +24,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        frozen=True,
     )
 
     # YouTube Data API — a single key. Multi-key rotation is a policy violation (§5.3).

@@ -4,4 +4,10 @@ __pycache__/
 .pytest_cache/
 .coverage
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
+.coverage.*
+*.egg-info
+dist/
 .env

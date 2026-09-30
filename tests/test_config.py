@@ -72,3 +72,21 @@ def test_get_settings_is_cached(clean_env: None) -> None:
     get_settings.cache_clear()
     assert get_settings() is get_settings()
     get_settings.cache_clear()
+
+
+def test_negative_cache_ttl_rejected(clean_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CACHE_TTL_SECONDS", "-1")
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_non_numeric_cache_ttl_rejected(clean_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CACHE_TTL_SECONDS", "soon")
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_settings_is_frozen(clean_env: None) -> None:
+    settings = Settings()
+    with pytest.raises(ValidationError):
+        settings.mcp_port = 9000

@@ -140,23 +140,57 @@ async def test_values_survive_reconnect(tmp_path) -> None:
         assert await second.get("k") == {"a": 1}
 
 
-async def test_cache_does_not_block_event_loop(cache: Cache) -> None:
-    """A slow write must not stall other tasks — the whole point of aiosqlite."""
+async def test_cache_does_not_block_event_loop(tmp_path, monkeypatch) -> None:
+    """A slow write must not stall other tasks — the whole point of aiosqlite.
+
+    The write runs against a fake connection that yields to the event loop mid-write, and
+    ticks are counted while that write is still in flight. A blocking implementation (one
+    that holds the loop for the write's duration) counts zero ticks and fails.
+    """
     import anyio
 
+    class SlowConnection:
+        """Fake aiosqlite connection: every write stalls in a real awaitable sleep."""
+
+        async def execute(self, *_args: object) -> None:
+            await anyio.sleep(0.05)
+
+        async def commit(self) -> None:
+            await anyio.sleep(0.05)
+
+        async def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "youtube_mcp.cache.aiosqlite.connect", lambda _path: _returns(SlowConnection())
+    )
+    cache = Cache(str(tmp_path / "cache.db"))
+    await cache.connect()
+
     ticks = 0
+    write_done = anyio.Event()
+
+    async def write() -> None:
+        await cache.set("k", {"payload": "x" * 1000}, ttl=60)
+        write_done.set()
 
     async def spin() -> None:
         nonlocal ticks
-        while ticks < 5:
+        while not write_done.is_set() and ticks < 1000:
             ticks += 1
-            await anyio.sleep(0.01)
+            await anyio.sleep(0.005)
 
     async with anyio.create_task_group() as tg:
+        tg.start_soon(write)
         tg.start_soon(spin)
-        for i in range(50):
-            await cache.set(f"k{i}", {"payload": "x" * 1000}, ttl=60)
-    assert ticks == 5
+        await write_done.wait()
+        assert ticks > 0  # counted before the in-flight write was joined
+
+
+async def test_negative_ttl_rejected(cache: Cache) -> None:
+    with pytest.raises(ValueError, match="ttl"):
+        await cache.set("k", "v", ttl=-1)
+    assert await cache.get("k") is None
 
 
 def test_namespaced() -> None:

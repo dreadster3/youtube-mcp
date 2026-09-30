@@ -76,6 +76,8 @@ class Cache:
 
     async def set(self, key: str, value: Any, *, ttl: int) -> None:
         """Store `value` under `key`, expiring after `ttl` seconds (0 = no expiry)."""
+        if ttl < 0:
+            raise ValueError("ttl must be >= 0 (0 = no expiry)")
         if self._db is None:
             raise RuntimeError("Cache.connect() must be awaited before use")
         expires_at = float("inf") if ttl == 0 else self._clock() + ttl
