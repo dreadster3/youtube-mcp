@@ -4,6 +4,8 @@ import pytest
 
 from collections.abc import AsyncIterator
 
+import aiosqlite
+
 from youtube_mcp.cache import Cache, namespaced
 
 
@@ -124,6 +126,32 @@ async def test_connect_failure_closes_connection_and_reraises(tmp_path, monkeypa
         await cache.connect()
     assert state["closed"] is True
     assert cache._db is None
+
+
+async def test_concurrent_connects_open_one_connection(tmp_path, monkeypatch) -> None:
+    """Two racing callers must share one connection: an orphaned one loses writes."""
+    import anyio
+
+    opened: list[object] = []
+    real_connect = aiosqlite.connect
+
+    async def counting_connect(path: str):
+        opened.append(path)
+        await anyio.sleep(0.02)  # widen the window the old code raced in
+        return await real_connect(path)
+
+    monkeypatch.setattr("youtube_mcp.cache.aiosqlite.connect", counting_connect)
+    cache = Cache(str(tmp_path / "cache.db"))
+
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(cache.connect)
+        tg.start_soon(cache.connect)
+
+    assert len(opened) == 1
+    assert cache._db is not None
+    await cache.set("k", "v", ttl=60)
+    assert await cache.get("k") == "v"
+    await cache.close()
 
 
 async def test_reconnect_is_idempotent(cache: Cache) -> None:

@@ -203,6 +203,39 @@ async def test_get_transcript_cursor_off_by_one_snaps_back_to_a_segment_start(
     assert page["next_cursor"] == 12
 
 
+async def test_get_transcript_cursor_past_the_end_returns_empty_untruncated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Last-page semantics, unified across the three cursor tools: past the end is empty."""
+    patch_fetch(monkeypatch, make_transcript("aaaaa", "bbbbb"))
+    mcp, _ = make_test_server(settings=Settings(_env_file=None, response_limit=11))
+
+    result = await call_tool(
+        mcp, "youtube_get_transcript", {"video_id": VIDEO_ID, "cursor": 999}
+    )
+
+    assert result["text"] == ""
+    assert result["next_cursor"] is None
+    assert result["truncated"] is False
+
+
+async def test_get_transcript_cursor_at_the_last_segment_is_the_last_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The only cursor the tools emit for a final page is the last segment's offset."""
+    patch_fetch(monkeypatch, make_transcript("aaaaa", "bbbbb", "ccccc"))
+    mcp, _ = make_test_server(settings=Settings(_env_file=None, response_limit=11))
+
+    first = await call_tool(mcp, "youtube_get_transcript", {"video_id": VIDEO_ID})
+    last = await call_tool(
+        mcp, "youtube_get_transcript", {"video_id": VIDEO_ID, "cursor": first["next_cursor"]}
+    )
+
+    assert first["next_cursor"] == 12  # offset of segment 2, the last one
+    assert last["text"] == "ccccc"
+    assert last["next_cursor"] is None
+
+
 async def test_get_transcript_empty_transcript_is_complete(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -338,6 +371,23 @@ async def test_timestamped_transcript_returns_segments_and_pages(
     assert [segment["text"] for segment in rest["segments"]] == ["ccccc"]
     assert rest["truncated"] is False
     assert rest["next_cursor"] is None
+
+
+async def test_timestamped_transcript_negative_cursor_starts_at_the_first_segment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A negative cursor must page from segment 0 — not re-emit the last segment first."""
+    patch_fetch(
+        monkeypatch, make_transcript("aaaaa", "bbbbb", "ccccc", starts=[0.0, 2.0, 4.0])
+    )
+    mcp, _ = make_test_server(settings=Settings(_env_file=None, response_limit=6))
+
+    page = await call_tool(
+        mcp, "youtube_get_timestamped_transcript", {"video_id": VIDEO_ID, "cursor": -1}
+    )
+
+    assert [segment["text"] for segment in page["segments"]] == ["aaaaa"]
+    assert page["next_cursor"] == 1
 
 
 async def test_timestamped_transcript_cursor_past_the_end_returns_empty_untruncated(
@@ -606,6 +656,34 @@ async def test_search_in_transcript_rejects_blank_query_without_fetching(
 
     assert "query must not be empty" in message
     assert calls == []
+
+
+async def test_search_in_transcript_cursor_past_the_end_returns_empty_untruncated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_fetch(monkeypatch, make_transcript("hit", "nothing"))
+    mcp, _ = make_test_server()
+
+    result = await call_tool(
+        mcp, "youtube_search_in_transcript", {"video_id": VIDEO_ID, "query": "hit", "cursor": 99}
+    )
+
+    assert result["matches"] == []
+    assert result["next_cursor"] is None
+    assert result["truncated"] is False
+
+
+async def test_search_in_transcript_negative_cursor_starts_at_the_first_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_fetch(monkeypatch, make_transcript("hit", "nothing"))
+    mcp, _ = make_test_server()
+
+    result = await call_tool(
+        mcp, "youtube_search_in_transcript", {"video_id": VIDEO_ID, "query": "hit", "cursor": -3}
+    )
+
+    assert [match["text"] for match in result["matches"]] == ["hit"]
 
 
 async def test_search_in_transcript_language_selects_one_track(

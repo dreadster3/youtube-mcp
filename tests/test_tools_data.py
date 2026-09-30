@@ -196,6 +196,16 @@ async def test_search_videos_rejects_out_of_range_max_results() -> None:
     assert stub.calls == []
 
 
+async def test_search_videos_rejects_blank_query_without_calling_the_client() -> None:
+    """A whitespace-only query is not a query: fail loudly instead of searching for spaces."""
+    mcp, stub = make_test_server(search_videos=models.SearchResults())
+
+    message = await call_error(mcp, "youtube_search_videos", {"query": "   "})
+
+    assert "query must not be empty" in message
+    assert stub.calls == []
+
+
 async def test_search_videos_returns_page_token() -> None:
     mcp, _ = make_test_server(
         search_videos=models.SearchResults.from_api(fixture("search_list.json"))
@@ -363,6 +373,17 @@ async def test_get_channel_handle_miss_is_a_clean_error() -> None:
 
     assert "no channel matches handle '@nope'" in message
     assert "channel ID instead" in message
+    assert "\n" not in message
+
+
+async def test_get_channel_id_miss_names_the_id_not_a_handle() -> None:
+    """The miss message must name the selector the caller actually passed."""
+    mcp, _ = make_test_server(list_channel=None)
+
+    message = await call_error(mcp, "youtube_get_channel", {"channel_id": CHANNEL_ID})
+
+    assert f"no channel matches id '{CHANNEL_ID}'" in message
+    assert "pass the handle instead" in message
     assert "\n" not in message
 
 

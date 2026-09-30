@@ -124,6 +124,25 @@ async def test_quota_and_limitation_wording_is_present_in_descriptions(
     assert phrase in tools[tool_name].description
 
 
+async def test_comments_description_does_not_promise_reply_counts(
+    settings: Settings, resources: ServerResources
+) -> None:
+    """The Comment model has no `total_reply_count`, so the prose must not promise one."""
+    mcp = build_mcp(settings, resources)
+
+    async with Client(mcp) as client:
+        tools = {tool.name: tool for tool in await client.list_tools()}
+
+    comments = tools["youtube_get_comments"]
+    assert "total_reply_count" not in comments.description
+    assert "replies are not returned" in comments.description
+    assert "counts" in comments.description
+    assert comments.output_schema is not None
+    assert "reply_count" not in comments.output_schema.get("properties", {}).get("items", {}).get(
+        "items", {}
+    ).get("properties", {})
+
+
 async def test_dislike_unavailability_is_stated_on_both_stat_tools(
     settings: Settings, resources: ServerResources
 ) -> None:
@@ -137,6 +156,19 @@ async def test_dislike_unavailability_is_stated_on_both_stat_tools(
         description = tools[name].description.lower()
         assert "dislike" in description
         assert "private" in description or "not exist" in description
+
+
+async def test_server_instructions_state_the_real_quota_buckets(
+    settings: Settings, resources: ServerResources
+) -> None:
+    """§5.3: batchGetStats has its own 10,000/day bucket — the instructions must say so."""
+    mcp = build_mcp(settings, resources)
+
+    instructions = mcp.instructions
+
+    assert "search.list allows 100 calls/day" in instructions
+    assert "batchGetStats) have their own 10,000-call/day bucket" in instructions
+    assert "everything else shares 10,000" not in instructions
 
 
 async def test_no_tool_has_a_dislike_field(

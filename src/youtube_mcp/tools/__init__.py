@@ -7,7 +7,7 @@ configuration (the app factory owns that).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from fastmcp import FastMCP
 
@@ -23,9 +23,6 @@ class Deps:
     client: YouTubeClient
     cache: Cache | None
     settings: Settings
-    #: Extra languages tried after the requested ones (the configured default). Empty by
-    #: default; a hook for operators who want a fixed fallback chain.
-    fallback_languages: tuple[str, ...] = field(default=())
 
 
 def register_all(mcp: FastMCP, deps: Deps) -> None:

@@ -10,6 +10,7 @@ from collections.abc import Callable
 from typing import Any
 
 import aiosqlite
+import anyio
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS cache (
@@ -31,19 +32,25 @@ class Cache:
         self._database_path = database_path
         self._clock = clock
         self._db: aiosqlite.Connection | None = None
+        # Guards `connect()`: without it two racing callers both see `_db is None` across the
+        # connect await and open two connections, and writes through the orphaned one are lost.
+        self._connect_lock = anyio.Lock()
 
     async def connect(self) -> None:
-        """Open the connection and create the schema. Idempotent."""
+        """Open the connection and create the schema. Idempotent, and safe to call concurrently."""
         if self._db is not None:
             return
-        db = await aiosqlite.connect(self._database_path)
-        try:
-            await db.execute(_SCHEMA)
-            await db.commit()
-        except Exception:
-            await db.close()
-            raise
-        self._db = db
+        async with self._connect_lock:
+            if self._db is not None:
+                return
+            db = await aiosqlite.connect(self._database_path)
+            try:
+                await db.execute(_SCHEMA)
+                await db.commit()
+            except Exception:
+                await db.close()
+                raise
+            self._db = db
 
     async def close(self) -> None:
         if self._db is not None:

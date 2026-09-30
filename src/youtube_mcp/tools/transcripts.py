@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from youtube_mcp.cache import ensure_connected
 from youtube_mcp.tools import Deps
@@ -147,10 +147,14 @@ def _start_index(offsets: list[int], cursor: int | None) -> int:
     """Map a cursor onto the segment it resumes at (`bisect` over the boundary offsets).
 
     A cursor that is not exactly on a boundary — an LLM doing arithmetic on it — snaps back
-    to the start of the segment containing it rather than splitting a segment.
+    to the start of the segment containing it rather than splitting a segment. A cursor past
+    the end returns `len(offsets)`, i.e. an empty page: the last page's cursor is exactly
+    `offsets[-1]`.
     """
     if cursor is None or not offsets:
         return 0
+    if cursor > offsets[-1]:
+        return len(offsets)
     from bisect import bisect_right
 
     return max(0, min(bisect_right(offsets, cursor) - 1, len(offsets) - 1))
@@ -293,7 +297,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         )
         snippets, next_cursor = _segment_window(
             transcript.snippets,
-            start=cursor or 0,
+            start=max(0, cursor or 0),
             limit=deps.settings.response_limit,
         )
         return TimestampedSegments(
