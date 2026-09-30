@@ -103,6 +103,18 @@ class Cache:
         return cursor.rowcount
 
 
+async def ensure_connected(cache: "Cache | None") -> "Cache | None":
+    """Connect `cache` if it is not open yet; return it unchanged (tolerates `None`).
+
+    `Cache.get()` silently returns the default before `connect()` while `set()` raises, so a
+    forgotten connect would quietly disable caching. The server factory connects the cache in
+    its lifespan; tool paths call this as belt-and-braces (Batch-1 landmine 4).
+    """
+    if cache is not None:
+        await cache.connect()
+    return cache
+
+
 def namespaced(namespace: str, *parts: str) -> str:
     """Build a cache key: `namespaced("transcript", video_id, lang)` -> `transcript:id:lang`.
 
