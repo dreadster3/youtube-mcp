@@ -60,13 +60,16 @@ class Settings(BaseSettings):
     https_proxy: str | None = None
 
     def require_api_key(self) -> str:
-        """Return the API key, or raise if it is missing.
+        """Return the API key, or raise if it is missing or blank.
 
-        Called on the startup path so tests can build a `Settings` without a key.
+        Called on the startup path so tests can build a `Settings` without a key. A key that is
+        present but blank (or whitespace-only) is treated as missing — an empty key would
+        otherwise produce a container that starts and then fails every live call.
         """
-        if self.youtube_api_key is None:
+        key = self.youtube_api_key.get_secret_value().strip() if self.youtube_api_key else ""
+        if not key:
             raise MissingApiKeyError("YOUTUBE_API_KEY is required")
-        return self.youtube_api_key.get_secret_value()
+        return key
 
 
 @lru_cache(maxsize=1)

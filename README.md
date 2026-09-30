@@ -62,8 +62,9 @@ Notes that the tool descriptions also carry, because the model is the main consu
 
 - **No dislikes anywhere.** Not on videos, not on comments, not on `batchGetStats`. Tool
   descriptions say so explicitly so the model stops asking.
-- **Comments are top-level only in this version.** Each comment carries `total_reply_count`, but reply
-  texts are not fetched. Do not read the count as content that was retrieved.
+- **Comments are top-level only in this version.** Replies are not returned — and neither are their
+  counts. Only top-level comments come back, so there is no reply text and no reply count to present;
+  never imply a reply was read.
 - **Transcripts are unavailable for some videos, and that is normal.** Captions disabled by the
   uploader (`TRANSCRIPT_DISABLED`), no track in the requested language (`TRANSCRIPT_NOT_FOUND`),
   age-restricted due to broken upstream cookie auth in `youtube-transcript-api` 1.2.4
@@ -129,7 +130,7 @@ tool call.
 | `MCP_HOST` | `0.0.0.0` | HTTP listen address. |
 | `MCP_PORT` | `8088` | HTTP listen port. |
 | `FASTMCP_STATELESS_HTTP` | `true` | See [Kubernetes](#kubernetes) — leave it true in a cluster. |
-| `RESPONSE_LIMIT` | `50000` | Transcript truncation threshold, in characters (segment count for the timestamped variant). |
+| `RESPONSE_LIMIT` | `50000` | Transcript truncation threshold, in characters. The same cumulative-character policy applies to both the plain and timestamped variants. |
 | `CACHE_TTL_SECONDS` | `3600` | Declared in `config.py`; the caching paths currently use per-target TTLs instead (see [Caching](#caching)) — so setting this has **no effect today**. |
 | `DATABASE_PATH` | `cache.db` | SQLite cache file. **Relative by default** — set an absolute path in a container. |
 | `WEBSHARE_PROXY_USERNAME` / `WEBSHARE_PROXY_PASSWORD` | unset | Webshare proxy for transcript fetching; password is a `SecretStr`. |
@@ -245,7 +246,7 @@ deleted on read.
 
 ```bash
 uv sync                              # dev dependencies included
-uv run pytest                        # 362 tests, offline
+uv run pytest                        # full suite, offline
 uv run python -c "from youtube_mcp.server import create_app; print('importable')"
 ```
 

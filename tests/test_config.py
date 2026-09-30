@@ -56,6 +56,20 @@ def test_api_key_may_be_absent_for_tests(clean_env: None) -> None:
         settings.require_api_key()
 
 
+@pytest.mark.parametrize("value", ["", "   ", "\t\n"])
+def test_blank_api_key_rejected(
+    clean_env: None, monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("YOUTUBE_API_KEY", value)
+    with pytest.raises(MissingApiKeyError, match="YOUTUBE_API_KEY"):
+        Settings().require_api_key()
+
+
+def test_padded_api_key_is_stripped(clean_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("YOUTUBE_API_KEY", "  test-key  ")
+    assert Settings().require_api_key() == "test-key"
+
+
 def test_invalid_transport_rejected(clean_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MCP_TRANSPORT", "carrier-pigeon")
     with pytest.raises(ValidationError):
