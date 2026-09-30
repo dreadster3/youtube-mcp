@@ -393,7 +393,25 @@ async def test_invalid_video_id_rejected_without_a_network_call(
     assert raised.value.code is TranscriptErrorCode.INVALID_REQUEST
     assert raised.value.retryable is False
     assert factory.constructions == []
-    _assert_short_message(raised.value, bad_id)
+    # The echoed input is truncated for long input, so compare against the display form.
+    _assert_short_message(raised.value, bad_id[:15])
+
+
+async def test_rejected_video_id_is_truncated_in_the_error_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 10 kB paste must not become a 10 kB error message."""
+    patch_api(monkeypatch, FakeApi())
+    huge = "x" * 10_000
+
+    with pytest.raises(TranscriptError) as raised:
+        await fetch_transcript(huge)
+
+    message = str(raised.value)
+    assert huge not in message
+    assert "x" * 15 + "…" in message
+    assert len(message) < 300
+    assert "\n" not in message
 
 
 # --- happy paths ---------------------------------------------------------------------------
@@ -624,6 +642,33 @@ async def test_cache_hit_under_a_later_language_code(
     assert len(api.fetch_calls) == 1
 
 
+async def test_styled_variant_is_not_served_from_a_default_variant_cache_hit(
+    monkeypatch: pytest.MonkeyPatch, opened_cache: Cache
+) -> None:
+    """`preserve_formatting=True` returns different text, so it needs its own cache entry."""
+    default_api = FakeApi(result=fetched(("hi", 0.0, 1.0)))
+    styled_api = FakeApi(result=fetched(("hi\n\n", 0.0, 1.0)))
+    patch_api(monkeypatch, default_api, styled_api)
+
+    await fetch_transcript(VIDEO_ID, languages=["en"], cache=opened_cache)
+    styled = await fetch_transcript(
+        VIDEO_ID, languages=["en"], preserve_formatting=True, cache=opened_cache
+    )
+
+    # The stripped entry must not satisfy the styled call: a second library call happened.
+    assert default_api.fetch_calls == [(VIDEO_ID, ("en",), False)]
+    assert styled_api.fetch_calls == [(VIDEO_ID, ("en",), True)]
+    assert styled.snippets[0].text == "hi\n\n"
+    assert await opened_cache.get("transcript:dQw4w9WgXcQ:en:styled") is not None
+
+    # And the styled entry is what a second styled call reads back.
+    again = await fetch_transcript(
+        VIDEO_ID, languages=["en"], preserve_formatting=True, cache=opened_cache
+    )
+    assert again == styled
+    assert styled_api.fetch_calls == [(VIDEO_ID, ("en",), True)]
+
+
 async def test_tracks_are_cached(
     monkeypatch: pytest.MonkeyPatch, opened_cache: Cache
 ) -> None:
@@ -683,6 +728,25 @@ def test_build_proxy_config_webshare_wins_when_both_are_set() -> None:
     url = config.to_requests_dict()["https"]
     assert url.startswith("http://dreadster-PT-ES-rotate:s3cret@")
     assert "p.webshare.io" in url
+
+
+def test_build_proxy_config_warns_on_a_partial_webshare_pair(caplog) -> None:
+    """One credential alone silently degrades to a direct connection — say so."""
+    with caplog.at_level("WARNING", logger="youtube_mcp.transcript.fetch"):
+        assert build_proxy_config(Settings(webshare_proxy_username="dreadster")) is None
+        assert build_proxy_config(Settings(webshare_proxy_password="s3cret")) is None
+
+    assert sum("webshare" in record.message for record in caplog.records) == 2
+
+
+def test_build_proxy_config_is_silent_when_webshare_is_absent_or_complete(caplog) -> None:
+    with caplog.at_level("WARNING", logger="youtube_mcp.transcript.fetch"):
+        assert build_proxy_config(Settings()) is None
+        build_proxy_config(
+            Settings(webshare_proxy_username="dreadster", webshare_proxy_password="s3cret")
+        )
+
+    assert caplog.records == []
 
 
 def test_build_proxy_config_generic_http_only() -> None:

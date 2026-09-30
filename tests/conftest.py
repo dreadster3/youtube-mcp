@@ -1,6 +1,18 @@
 """Shared pytest fixtures."""
 
+import json
+from pathlib import Path
+from typing import Any
+
 import pytest
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def fixture(name: str) -> Any:
+    """Load a recorded response — success and error envelopes share one directory."""
+    return json.loads((FIXTURES / name).read_text())
+
 
 ENV_VARS = [
     "YOUTUBE_API_KEY",

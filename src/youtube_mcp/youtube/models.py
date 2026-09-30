@@ -295,6 +295,8 @@ class VideoStats(BaseModel):
 
     @classmethod
     def from_api(cls, raw: Mapping[str, Any]) -> Self:
+        # `_video_fields` also returns `title`/`description`/`channel_*`, which this model does
+        # not declare; construction relies on pydantic's default `extra='ignore'` to drop them.
         return cls(video_id=_as_text(raw.get("id")), **_video_fields(raw))
 
 

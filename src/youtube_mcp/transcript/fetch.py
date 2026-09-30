@@ -56,6 +56,10 @@ WEBSHARE_FILTER_IP_LOCATIONS = ["pt", "es"]
 #: YouTube video IDs are 11 characters of [A-Za-z0-9_-].
 _VIDEO_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{11}")
 
+#: Cap on the rejected input echoed back in an error message, so a 10 kB paste cannot break
+#: the one-line message discipline (§11).
+_REJECTED_ID_MAX_CHARS = 15
+
 T = TypeVar("T")
 
 
@@ -100,6 +104,10 @@ def build_proxy_config(settings: Settings) -> ProxyConfig | None:
     Webshare wins when both its credentials are set; otherwise a generic proxy is used if either
     proxy URL is set.
     """
+    if bool(settings.webshare_proxy_username) != bool(settings.webshare_proxy_password):
+        logger.warning(
+            "webshare proxy needs both the username and the password; ignoring the partial pair"
+        )
     if settings.webshare_proxy_username and settings.webshare_proxy_password:
         return WebshareProxyConfig(
             proxy_username=settings.webshare_proxy_username,
@@ -115,9 +123,17 @@ def _error(code: TranscriptErrorCode, video_id: str, cause: str) -> TranscriptEr
     """Build a short, model-facing error: one line, video ID, cause.
 
     `str(error)` prefixes the taxonomy code. The library's own messages are multi-line blobs
-    ending in a GitHub-issue referral, so they are never surfaced (§11, research §B4).
+    ending in a GitHub-issue referral, so they are never surfaced (§11, research §B4). The
+    echoed input is truncated: rejected input can be arbitrarily long (a pasted URL, a blob).
     """
-    return TranscriptError(code, f"video {video_id}: {cause}")
+    return TranscriptError(code, f"video {_display_id(video_id)}: {cause}")
+
+
+def _display_id(video_id: str) -> str:
+    """Shorten a caller-supplied ID for an error message, keeping it one line."""
+    if len(video_id) <= _REJECTED_ID_MAX_CHARS:
+        return video_id
+    return video_id[:_REJECTED_ID_MAX_CHARS] + "…"
 
 
 #: Library exception -> taxonomy. First match wins; anything absent falls through to
@@ -206,6 +222,18 @@ def _validate_video_id(video_id: str) -> None:
         )
 
 
+def _transcript_key(video_id: str, language_code: str, *, styled: bool) -> str:
+    """Cache key for one transcript variant.
+
+    `preserve_formatting` output is a different payload from the default (stripped) one, so the
+    style variant is part of the key: a stripped entry must never satisfy a styled request. Both
+    directions are kept apart — see the cache tests.
+    """
+    if styled:
+        return namespaced("transcript", video_id, language_code, "styled")
+    return namespaced("transcript", video_id, language_code)
+
+
 def _api() -> YouTubeTranscriptApi:
     """A fresh client per call: each instance owns a `requests.Session` and is not thread-safe."""
     return YouTubeTranscriptApi(proxy_config=build_proxy_config(get_settings()))
@@ -292,16 +320,19 @@ async def fetch_transcript(
 
     `languages` defaults to the configured transcript language. A cached transcript never
     expires (a published transcript does not change, §14) and is keyed by the language that was
-    actually returned. Raises `TranscriptError` for every failure mode — never the library's own.
+    actually returned plus a `styled` marker when `preserve_formatting` is set, so a caller can
+    never be served the other style variant. Raises `TranscriptError` for every failure mode —
+    never the library's own.
     """
     _validate_video_id(video_id)
     codes = tuple(languages) if languages else (get_settings().youtube_transcript_lang,)
 
     if cache is not None:
-        # A hit under any requested language means an earlier call already resolved the track:
-        # the library prefers earlier codes, so a cached "pt" implies "en" was unavailable.
+        # A hit in any requested language is accepted even when a fresh call could prefer an
+        # earlier requested code: transcripts are immutable and the entry is always a correctly
+        # labelled requested language, so serving it is benign.
         for code in codes:
-            cached = await cache.get(namespaced("transcript", video_id, code))
+            cached = await cache.get(_transcript_key(video_id, code, styled=preserve_formatting))
             if cached is not None:
                 return Transcript.model_validate(cached)
 
@@ -312,7 +343,7 @@ async def fetch_transcript(
     )
     if cache is not None:
         await cache.set(
-            namespaced("transcript", video_id, transcript.language_code),
+            _transcript_key(video_id, transcript.language_code, styled=preserve_formatting),
             transcript.model_dump(),
             ttl=0,
         )
@@ -328,7 +359,11 @@ async def list_transcript_tracks(
     """
     _validate_video_id(video_id)
 
-    cached = await cache.get(namespaced("transcript_tracks", video_id)) if cache else None
+    cached = (
+        await cache.get(namespaced("transcript_tracks", video_id))
+        if cache is not None
+        else None
+    )
     if cached is not None:
         return TranscriptTrackList.model_validate(cached)
 

@@ -6,13 +6,12 @@ query params and status translation are exercised for real (no respx, no network
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
-from pathlib import Path
 
 import httpx
 import pytest
 
+from conftest import FIXTURES, fixture
 from youtube_mcp.config import Settings
 from youtube_mcp.youtube import client as client_module
 from youtube_mcp.youtube.client import (
@@ -36,13 +35,6 @@ from youtube_mcp.youtube.models import (
 )
 from youtube_mcp.youtube.quota import QuotaBucket, QuotaCounter, QuotaExceeded
 
-FIXTURES = Path(__file__).parent / "fixtures"
-
-
-
-def fixture(name: str) -> object:
-    """Load a recorded response — success and error envelopes share one directory."""
-    return json.loads((FIXTURES / name).read_text())
 
 
 class Recorder:
@@ -174,6 +166,17 @@ async def test_search_videos_rejects_out_of_range_max_results(max_results):
     assert handler.attempts == 0
 
 
+async def test_search_videos_rejects_empty_query_before_spending_quota():
+    handler = Recorder(ok({"items": []}))
+    client = make_client(handler)
+
+    with pytest.raises(InvalidRequestError, match="query must not be empty"):
+        await client.search_videos("")
+
+    assert handler.attempts == 0
+    assert client.quota.remaining(QuotaBucket.SEARCH) == 100
+
+
 async def test_batch_get_stats_parts_and_ids():
     handler = Recorder(ok(fixture("batch_get_stats.json")))
     client = make_client(handler)
@@ -296,6 +299,22 @@ async def test_list_channel_requires_exactly_one_selector(kwargs):
         await client.list_channel(**kwargs)
 
     assert handler.attempts == 0
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"channel_id": ""}, {"handle": ""}, {"handle": "@"}],
+)
+async def test_list_channel_rejects_empty_selector_before_spending_quota(kwargs):
+    """Empty-but-present is a caller bug, and the API would only charge us to say so."""
+    handler = Recorder(ok({}))
+    client = make_client(handler)
+
+    with pytest.raises(InvalidRequestError, match="must not be empty"):
+        await client.list_channel(**kwargs)
+
+    assert handler.attempts == 0
+    assert client.quota.remaining(QuotaBucket.SHARED) == 10_000
 
 
 async def test_list_playlist_items_params():
@@ -726,8 +745,9 @@ async def test_context_manager_closes_owned_client():
 async def test_missing_api_key_fails_fast():
     from youtube_mcp.config import MissingApiKeyError
 
+    # `_env_file=None`: a developer's own .env must not satisfy this test spuriously.
     with pytest.raises(MissingApiKeyError):
-        YouTubeClient(Settings())
+        YouTubeClient(Settings(_env_file=None))
 
 
 async def test_iterate_pages_walks_tokens_and_stops():

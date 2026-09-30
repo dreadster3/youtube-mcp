@@ -6,12 +6,11 @@ a shape change breaks both in one place.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
 
+from conftest import fixture
 from youtube_mcp.youtube import models
 from youtube_mcp.youtube.models import (
     BatchStatsResponse,
@@ -25,12 +24,6 @@ from youtube_mcp.youtube.models import (
     parse_duration_seconds,
     to_int,
 )
-
-FIXTURES = Path(__file__).parent / "fixtures"
-
-
-def fixture(name: str) -> dict:
-    return json.loads((FIXTURES / name).read_text())
 
 
 def test_to_int_tolerates_strings_ints_and_garbage():

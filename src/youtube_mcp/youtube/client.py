@@ -135,6 +135,9 @@ class UpstreamError(YouTubeApiError):
 
 
 #: Reason → error class. Matched on `error.errors[].reason`, never on `domain` (§5.4).
+#: `limitExceeded`/`servingLimitExceeded` classify as quota (non-retriable): treating a
+#: per-key daily ceiling as retriable only burns retries. `concurrentLimitExceeded` is the
+#: opposite — it clears on its own, so it stays in the retryable rate-limit set.
 _QUOTA_REASONS = frozenset(
     {"quotaExceeded", "dailyLimitExceeded", "limitExceeded", "servingLimitExceeded"}
 )
@@ -306,6 +309,11 @@ class YouTubeClient:
         sleep: Callable[[float], Awaitable[None]] = anyio.sleep,
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     ) -> None:
+        """`http_client` is trusted as given: an injected client keeps *its own* `trust_env`
+        setting, so a proxy the caller configured on it is used. Only an owned client is built
+        with `trust_env=False` (see the module docstring) — inject an explicit transport if you
+        want the Data API to bypass `HTTP_PROXY` on a client you construct yourself.
+        """
         self._api_key = settings.require_api_key()
         self._quota = quota if quota is not None else QuotaCounter()
         self._sleep = sleep
@@ -401,7 +409,13 @@ class YouTubeClient:
         safe_search: SafeSearch | None = None,
         page_token: str | None = None,
     ) -> models.SearchResults:
-        """`search.list` — the scarce bucket (100 calls/day). `type=video` is always sent."""
+        """`search.list` — the scarce bucket (100 calls/day). `type=video` is always sent.
+
+        `published_after` / `published_before` must be timezone-aware datetimes; a naive one
+        is treated as UTC (`_rfc3339`), which silently shifts the window on any other host TZ.
+        """
+        if not query:
+            raise InvalidRequestError("search_videos: query must not be empty")
         _check_range("max_results", max_results, MIN_SEARCH_RESULTS, MAX_SEARCH_RESULTS)
         params: dict[str, Any] = {
             "part": "snippet",
@@ -483,11 +497,16 @@ class YouTubeClient:
         """
         if (channel_id is None) == (handle is None):
             raise ValueError("pass exactly one of channel_id or handle")
+        # Empty-but-present is a caller bug, not a valid selector — reject before spending quota.
+        if channel_id is not None and not channel_id:
+            raise InvalidRequestError("list_channel: channel_id must not be empty")
+        if handle is not None and not handle.lstrip("@"):
+            raise InvalidRequestError("list_channel: handle must not be empty")
         params: dict[str, Any] = {"part": _join_parts(parts)}
         if channel_id is not None:
             params["id"] = channel_id
         else:
-            params["forHandle"] = handle.lstrip("@") if handle else handle
+            params["forHandle"] = handle.lstrip("@")
 
         self._quota.consume(QuotaBucket.SHARED)
         channels = models.channels_from_api(await self._get("channels", params))
