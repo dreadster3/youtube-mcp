@@ -1,1 +1,7 @@
 .pi/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+*.db
+.env
