@@ -1,0 +1,51 @@
+{
+  "kind": "youtube#playlistItemListResponse",
+  "etag": "Za1Bc2De3Fg4Hi5Jk6Lm7No8Pq",
+  "nextPageToken": "CAEQAA",
+  "pageInfo": { "totalResults": 5900, "resultsPerPage": 2 },
+  "items": [
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "Rs9Tu0Vw1Xy2Za3Bc4De5Fg6Hi",
+      "id": "UExYYWJjZGVm_abCDEFG",
+      "snippet": {
+        "publishedAt": "2024-05-01T12:34:56Z",
+        "channelId": "UCBR8-60-B28hp2BmDPdntcQ",
+        "title": "What's new in Android",
+        "description": "",
+        "playlistId": "UUx7I4zH7kz2Q4tU9mB0pX8aLw1Q",
+        "position": 0,
+        "resourceId": { "kind": "youtube#video", "videoId": "dQw4w9WgXcQ" },
+        "videoOwnerChannelId": "UCBR8-60-B28hp2BmDPdntcQ",
+        "videoOwnerChannelTitle": "Google Developers",
+        "thumbnails": {
+          "default": { "url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/default.jpg", "width": 120, "height": 90 }
+        }
+      },
+      "contentDetails": {
+        "videoId": "dQw4w9WgXcQ",
+        "videoPublishedAt": "2024-04-30T16:00:00Z"
+      }
+    },
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "Jk0Lm1No2Pq3Rs4Tu5Vw6Xy7Za",
+      "id": "UExYYWJjZGVm_hijKLMN",
+      "snippet": {
+        "publishedAt": "2024-04-24T12:34:56Z",
+        "channelId": "UCBR8-60-B28hp2BmDPdntcQ",
+        "title": "Gemini API tutorial",
+        "description": "",
+        "playlistId": "UUx7I4zH7kz2Q4tU9mB0pX8aLw1Q",
+        "position": 1,
+        "resourceId": { "kind": "youtube#video", "videoId": "aqz-KE-bpKQ" },
+        "videoOwnerChannelId": "UCBR8-60-B28hp2BmDPdntcQ",
+        "videoOwnerChannelTitle": "Google Developers"
+      },
+      "contentDetails": {
+        "videoId": "aqz-KE-bpKQ",
+        "videoPublishedAt": "2024-04-23T16:00:00Z"
+      }
+    }
+  ]
+}

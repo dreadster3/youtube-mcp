@@ -1,0 +1,15 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "Too many requests have been sent within a given time span.",
+        "domain": "youtube.quota",
+        "reason": "rateLimitExceeded",
+        "locationType": "header",
+        "location": "Authorization"
+      }
+    ],
+    "code": 429,
+    "message": "Too many requests have been sent within a given time span."
+  }
+}

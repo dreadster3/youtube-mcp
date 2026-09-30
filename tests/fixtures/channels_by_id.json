@@ -1,0 +1,34 @@
+{
+  "kind": "youtube#channelListResponse",
+  "etag": "Pw2NmL4hG7kD9sA1bC3dE5fG6hJ",
+  "pageInfo": { "totalResults": 1, "resultsPerPage": 5 },
+  "items": [
+    {
+      "kind": "youtube#channel",
+      "etag": "Qr8Sv9Tw0Ux1Vy2Wz3Aa4Bb5Cc",
+      "id": "UCBR8-60-B28hp2BmDPdntcQ",
+      "snippet": {
+        "title": "Google Developers",
+        "description": "The official YouTube channel for Google Developers.",
+        "customUrl": "@GoogleDevelopers",
+        "publishedAt": "2007-08-23T00:00:00Z",
+        "country": "US",
+        "thumbnails": {
+          "default": { "url": "https://yt3.ggpht.com/def.jpg", "width": 88, "height": 88 }
+        }
+      },
+      "contentDetails": {
+        "relatedPlaylists": {
+          "likes": "",
+          "uploads": "UUx7I4zH7kz2Q4tU9mB0pX8aLw1Q"
+        }
+      },
+      "statistics": {
+        "viewCount": "287000000",
+        "subscriberCount": "2600000",
+        "hiddenSubscriberCount": false,
+        "videoCount": "5900"
+      }
+    }
+  ]
+}

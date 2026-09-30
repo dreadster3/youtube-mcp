@@ -1,0 +1,15 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "The request is missing a required parameter: part",
+        "domain": "youtube.parameter",
+        "reason": "missingRequiredParameter",
+        "locationType": "parameter",
+        "location": "part"
+      }
+    ],
+    "code": 400,
+    "message": "The request is missing a required parameter: part"
+  }
+}

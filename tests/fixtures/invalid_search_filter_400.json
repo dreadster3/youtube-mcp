@@ -1,0 +1,15 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "The request contains an invalid search filter.",
+        "domain": "youtube.search",
+        "reason": "invalidSearchFilter",
+        "locationType": "parameter",
+        "location": "videoCategoryId"
+      }
+    ],
+    "code": 400,
+    "message": "The request contains an invalid search filter."
+  }
+}

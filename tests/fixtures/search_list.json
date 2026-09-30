@@ -1,0 +1,38 @@
+{
+  "kind": "youtube#searchListResponse",
+  "etag": "Bf2Kq9x9S7v3mQ0dY1uXjZ6bA4w",
+  "nextPageToken": "CAUQAA",
+  "regionCode": "PT",
+  "pageInfo": { "totalResults": 7430000, "resultsPerPage": 2 },
+  "items": [
+    {
+      "kind": "youtube#searchResult",
+      "etag": "9dLkJ2qUu1vM4rT7bY8sXe0cG3w",
+      "id": { "kind": "youtube#video", "videoId": "dQw4w9WgXcQ" },
+      "snippet": {
+        "publishedAt": "2009-10-25T06:57:33Z",
+        "channelId": "UCuAXFkgsw1L7xaCfbd5SE8p",
+        "title": "Rick Astley - Never Gonna Give You Up (Official Video)",
+        "description": "The official video for ...",
+        "channelTitle": "Rick Astley",
+        "liveBroadcastContent": "none",
+        "thumbnails": {
+          "default": { "url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/default.jpg", "width": 120, "height": 90 }
+        }
+      }
+    },
+    {
+      "kind": "youtube#searchResult",
+      "etag": "1aB2cD3eF4gH5iJ6kL7mN8oP9qR",
+      "id": { "kind": "youtube#video", "videoId": "aqz-KE-bpKQ" },
+      "snippet": {
+        "publishedAt": "2008-05-15T11:52:07Z",
+        "channelId": "UC1opHUrw8rvnsadT-iGp7Cg",
+        "title": "Big Buck Bunny",
+        "description": "Big Buck Bunny tells the story ...",
+        "channelTitle": "Blender",
+        "liveBroadcastContent": "none"
+      }
+    }
+  ]
+}

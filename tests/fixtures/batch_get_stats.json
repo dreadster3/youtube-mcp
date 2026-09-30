@@ -1,0 +1,36 @@
+{
+  "kind": "youtube#batchGetStatsResponse",
+  "etag": "3nYo3KzH0qyKf4KZ6hZ3oIq4XzY",
+  "items": [
+    {
+      "kind": "youtube#videoStats",
+      "etag": "8Z1kOoGQsN7l9u2Xa0YjGwAxBc4",
+      "id": "dQw4w9WgXcQ",
+      "snippet": { "publishTime": "2009-10-25T06:57:33Z" },
+      "statistics": {
+        "viewCount": "1620000000",
+        "likeCount": "17000000",
+        "commentCount": "2400000"
+      },
+      "contentDetails": { "duration": "213s", "durationMillis": 213000 }
+    },
+    {
+      "kind": "youtube#videoStats",
+      "etag": "Xn3sO9qTz8u1Bf7Yc5Kd9jV0LkQ",
+      "id": "aqz-KE-bpKQ",
+      "snippet": { "publishTime": "2008-05-15T11:52:07Z" },
+      "statistics": {
+        "viewCount": "99000000",
+        "likeCount": "310000",
+        "commentCount": "52000"
+      },
+      "contentDetails": { "duration": "596s", "durationMillis": 596000 }
+    }
+  ],
+  "summary": {
+    "requestedVideoCount": 2,
+    "succeededVideoCount": 2,
+    "failedVideoCount": 0,
+    "failedVideoIds": []
+  }
+}

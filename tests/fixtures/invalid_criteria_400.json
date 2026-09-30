@@ -1,0 +1,15 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "A maximum of one of the following filters may be specified: id, forHandle.",
+        "domain": "youtube.parameter",
+        "reason": "invalidCriteria",
+        "locationType": "parameter",
+        "location": ""
+      }
+    ],
+    "code": 400,
+    "message": "A maximum of one of the following filters may be specified: id, forHandle."
+  }
+}

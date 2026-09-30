@@ -1,0 +1,15 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "The request's part parameter specifies an unknown part.",
+        "domain": "youtube.part",
+        "reason": "unknownPart",
+        "locationType": "parameter",
+        "location": "part"
+      }
+    ],
+    "code": 400,
+    "message": "The request's part parameter specifies an unknown part."
+  }
+}

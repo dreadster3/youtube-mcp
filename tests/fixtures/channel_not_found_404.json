@@ -1,0 +1,15 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "The channel specified in the id parameter cannot be found.",
+        "domain": "youtube.channel",
+        "reason": "channelNotFound",
+        "locationType": "parameter",
+        "location": "id"
+      }
+    ],
+    "code": 404,
+    "message": "The channel specified in the id parameter cannot be found."
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "The request specifies an invalid page token.",
+        "domain": "youtube.parameter",
+        "reason": "invalidPageToken",
+        "locationType": "parameter",
+        "location": "pageToken"
+      }
+    ],
+    "code": 400,
+    "message": "The request specifies an invalid page token."
+  }
+}

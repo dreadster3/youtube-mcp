@@ -1,0 +1,15 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "The video identified by the videoId parameter cannot be found.",
+        "domain": "youtube.video",
+        "reason": "videoNotFound",
+        "locationType": "parameter",
+        "location": "videoId"
+      }
+    ],
+    "code": 404,
+    "message": "The video identified by the videoId parameter cannot be found."
+  }
+}

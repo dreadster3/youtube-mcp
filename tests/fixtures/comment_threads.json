@@ -1,0 +1,62 @@
+{
+  "kind": "youtube#commentThreadListResponse",
+  "etag": "Mn5Op6Qr7St8Uv9Wx0Yz1Ab2Cd",
+  "nextPageToken": "Qg8QAA",
+  "pageInfo": { "totalResults": 2400000, "resultsPerPage": 2 },
+  "items": [
+    {
+      "kind": "youtube#commentThread",
+      "etag": "Ef3Gh4Ij5Kl6Mn7Op8Qr9St0Uv",
+      "id": "UgxKZ0nQ_1a2b3c4d5e6f7g8",
+      "snippet": {
+        "videoId": "dQw4w9WgXcQ",
+        "channelId": "UCuAXFkgsw1L7xaCfbd5SE8p",
+        "isPublic": true,
+        "canReply": true,
+        "totalReplyCount": 3,
+        "topLevelComment": {
+          "kind": "youtube#comment",
+          "etag": "Wx1Yz2Ab3Cd4Ef5Gh6Ij7Kl8Mn",
+          "id": "UgxKZ0nQ_1a2b3c4d5e6f7g8",
+          "snippet": {
+            "textDisplay": "Best song ever written.",
+            "authorDisplayName": "Alice",
+            "authorProfileImageUrl": "https://yt3.ggpht.com/alice.jpg",
+            "authorChannelUrl": "http://www.youtube.com/channel/UC_alice",
+            "authorChannelId": { "value": "UC_alice_channel_id" },
+            "likeCount": 42,
+            "publishedAt": "2020-01-02T03:04:05Z",
+            "updatedAt": "2020-01-02T03:04:05Z",
+            "viewerRating": "none",
+            "channelId": "UCuAXFkgsw1L7xaCfbd5SE8p",
+            "videoId": "dQw4w9WgXcQ"
+          }
+        }
+      }
+    },
+    {
+      "kind": "youtube#commentThread",
+      "etag": "Op9Qr0St1Uv2Wx3Yz4Ab5Cd6Ef",
+      "id": "UgxKZ0nQ_h9i8j7k6l5m4n3",
+      "snippet": {
+        "videoId": "dQw4w9WgXcQ",
+        "channelId": "UCuAXFkgsw1L7xaCfbd5SE8p",
+        "isPublic": true,
+        "canReply": true,
+        "totalReplyCount": 0,
+        "topLevelComment": {
+          "kind": "youtube#comment",
+          "etag": "Gh7Ij8Kl9Mn0Op1Qr2St3Uv4Wx",
+          "id": "UgxKZ0nQ_h9i8j7k6l5m4n3",
+          "snippet": {
+            "textDisplay": "Still here in 2026 &lt;3",
+            "authorDisplayName": "Bob",
+            "authorChannelId": { "value": "UC_bob_channel_id" },
+            "likeCount": 0,
+            "publishedAt": "2026-01-01T00:00:00Z"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "A daily quota limit for the API has been reached.",
+        "domain": "usageLimits",
+        "reason": "dailyLimitExceeded"
+      }
+    ],
+    "code": 403,
+    "message": "A daily quota limit for the API has been reached."
+  }
+}

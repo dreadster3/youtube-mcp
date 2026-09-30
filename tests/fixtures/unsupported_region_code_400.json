@@ -1,0 +1,15 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "The region code is not supported.",
+        "domain": "youtube.parameter",
+        "reason": "unsupportedRegionCode",
+        "locationType": "parameter",
+        "location": "regionCode"
+      }
+    ],
+    "code": 400,
+    "message": "The region code is not supported."
+  }
+}

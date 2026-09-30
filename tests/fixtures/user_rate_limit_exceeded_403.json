@@ -1,0 +1,13 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "The per-user rate limit has been reached.",
+        "domain": "usageLimits",
+        "reason": "userRateLimitExceeded"
+      }
+    ],
+    "code": 403,
+    "message": "The per-user rate limit has been reached."
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "kind": "youtube#videoCategoryListResponse",
+  "etag": "Yz9Ab0Cd1Ef2Gh3Ij4Kl5Mn6Op",
+  "items": [
+    {
+      "kind": "youtube#videoCategory",
+      "etag": "Qr7St8Uv9Wx0Yz1Ab2Cd3Ef4Gh",
+      "id": "1",
+      "snippet": {
+        "title": "Film & Animation",
+        "assignable": true,
+        "channelId": "UCBR8-60-B28hp2BmDPdntcQ"
+      }
+    },
+    {
+      "kind": "youtube#videoCategory",
+      "etag": "Ij5Kl6Mn7Op8Qr9St0Uv1Wx2Yz",
+      "id": "10",
+      "snippet": {
+        "title": "Music",
+        "assignable": true,
+        "channelId": "UCBR8-60-B28hp2BmDPdntcQ"
+      }
+    },
+    {
+      "kind": "youtube#videoCategory",
+      "etag": "Ab3Cd4Ef5Gh6Ij7Kl8Mn9Op0Qr",
+      "id": "44",
+      "snippet": {
+        "title": "Trailers",
+        "assignable": false,
+        "channelId": "UCBR8-60-B28hp2BmDPdntcQ"
+      }
+    }
+  ]
+}
