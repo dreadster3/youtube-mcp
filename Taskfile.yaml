@@ -8,8 +8,8 @@ version: "3"
 # Runner: `task <name>` if go-task is installed, else `uvx --from go-task-bin task <name>`
 # (`uvx` works anywhere uv exists — note go-task is published as `go-task-bin`, not `go-task`).
 #
-# `ci` is the local gate and stays fast and network-free; docker lives in `docker-build`,
-# `docker-smoke` and `release` because it is the one slow, network-touching action here.
+# `check` is the local gate and stays fast and network-free; docker lives in `docker-build`
+# because it is the one slow, network-touching action here.
 
 vars:
   # Image tag from the git tag. `--always` degrades to a bare SHA on an untagged checkout, so
@@ -30,6 +30,13 @@ tasks:
     desc: Sync the project environment including dev dependencies
     cmds:
       - uv sync
+
+  run:
+    desc: Launch the server locally — stdio, or MCP_TRANSPORT=http for an HTTP server
+    env:
+      MCP_TRANSPORT: '{{.MCP_TRANSPORT | default "stdio"}}'
+    cmds:
+      - uv run youtube-mcp
 
   lint:
     desc: ruff check — strict
@@ -67,7 +74,7 @@ tasks:
       - uv lock --check
 
   check:
-    desc: CI gate — lint + fmt-check + lock-check + test (no docker; `release` adds that)
+    desc: CI gate — lint + fmt-check + lock-check + test (no docker)
     cmds:
       - task: lint
       - task: fmt-check

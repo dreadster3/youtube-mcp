@@ -227,21 +227,19 @@ uvx --from go-task-bin task --list      # what is available
 | Task | What it runs |
 | --- | --- |
 | `install` | `uv sync` — dev dependencies included |
+| `run` | `uv run youtube-mcp` — stdio server for a local agent; `task run MCP_TRANSPORT=http` for the HTTP transport |
 | `lint` | `ruff check .` — the rule set is in `[tool.ruff.lint]` |
 | `fmt` / `fmt-check` | `ruff format .` / `ruff format --check .` (the latter never mutates) |
 | `typecheck` | `mypy`, strict on `src/youtube_mcp` |
 | `test` | `uv run pytest` — the offline suite |
 | `coverage` | same suite with `--cov-report=term-missing` named explicitly |
 | `lock-check` | `uv lock --check` — fails if `uv.lock` drifted from `pyproject.toml` |
-| `ci` | `lint` + `fmt-check` + `lock-check` + `test` — the local gate, no docker |
+| `check` | `lint` + `fmt-check` + `lock-check` + `test` — the local gate |
 | `docker-build` | builds `youtube-mcp:<tag>`, where `<tag>` is `git describe --tags --always` (a bare SHA on an untagged checkout, `dev` if that fails too) |
-| `docker-smoke` | builds, then runs the image: `/health` must answer (bounded retry, container logged and the task failed otherwise), and a container with no `YOUTUBE_API_KEY` must exit 1 |
-| `release` | `ci` + `docker-build` + `docker-smoke` — everything, including the slow part |
-| `default` | `lint` + `fmt-check` + `test` — what a bare `task` runs |
+| `default` | `task -l` — what a bare `task` runs |
 
-`ci` is deliberately docker-free so it stays fast and works offline; the image is built by
-`docker-build`, `docker-smoke` and `release`. Docker commands carry timeouts, and `docker-smoke`
-removes its container whether it passes or fails.
+`check` is the only gate; it is docker-free, so it stays fast and works offline. `docker-build` is
+separate because docker is the one slow, network-touching action here.
 
 Layout:
 
@@ -255,7 +253,7 @@ src/youtube_mcp/
 └── tools/             # data.py, transcripts.py, errors.py — one module per tool group
 tests/                 # pytest + recorded fixtures
 deploy/                # Dockerfile
-Taskfile.yaml          # the CI tasks documented above
+Taskfile.yaml          # the development tasks documented above
 ```
 
 ### Manual smoke test
