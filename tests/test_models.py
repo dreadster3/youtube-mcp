@@ -6,7 +6,7 @@ a shape change breaks both in one place.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -67,7 +67,7 @@ def test_search_results_shape():
     first = results.items[0]
     assert first.video_id == "dQw4w9WgXcQ"  # read from id.videoId, not id
     assert first.channel_title == "Rick Astley"
-    assert first.published_at == datetime(2009, 10, 25, 6, 57, 33, tzinfo=timezone.utc)
+    assert first.published_at == datetime(2009, 10, 25, 6, 57, 33, tzinfo=UTC)
 
 
 def test_search_result_without_next_page_token_has_none():
@@ -117,8 +117,8 @@ def test_playlist_item_distinguishes_item_id_from_video_id():
     assert item.video_id == "dQw4w9WgXcQ"  # from snippet.resourceId.videoId
     assert item.item_id != item.video_id
     assert item.position == 0
-    assert item.video_published_at == datetime(2024, 4, 30, 16, 0, tzinfo=timezone.utc)
-    assert item.published_at == datetime(2024, 5, 1, 12, 34, 56, tzinfo=timezone.utc)
+    assert item.video_published_at == datetime(2024, 4, 30, 16, 0, tzinfo=UTC)
+    assert item.published_at == datetime(2024, 5, 1, 12, 34, 56, tzinfo=UTC)
 
 
 def test_playlist_item_without_resource_id_is_not_an_error():
@@ -146,7 +146,7 @@ def test_video_shape_from_videos_list():
 
     assert video.duration_seconds == 213
     assert (video.view_count, video.like_count, video.comment_count) == (1, 2, 3)
-    assert video.published_at == datetime(2009, 10, 25, 6, 57, 33, tzinfo=timezone.utc)
+    assert video.published_at == datetime(2009, 10, 25, 6, 57, 33, tzinfo=UTC)
 
 
 def test_batch_stats_shape():
@@ -160,7 +160,7 @@ def test_batch_stats_shape():
     assert stats.like_count == 17000000
     assert stats.comment_count == 2400000
     assert stats.duration_seconds == 213
-    assert stats.published_at == datetime(2009, 10, 25, 6, 57, 33, tzinfo=timezone.utc)
+    assert stats.published_at == datetime(2009, 10, 25, 6, 57, 33, tzinfo=UTC)
     assert response.summary.failed_video_count == 0
 
 

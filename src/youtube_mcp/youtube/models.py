@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping
 from datetime import datetime
-from typing import Any, Self, TypeVar
+from typing import Any, Self
 
 from pydantic import BaseModel, Field
 
@@ -39,8 +39,6 @@ __all__ = [
     "to_int",
 ]
 
-T = TypeVar("T")
-
 _ISO_DURATION = re.compile(
     r"^P(?:(?P<days>\d+)D)?"
     r"(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+(?:\.\d+)?)S)?)?$"
@@ -58,9 +56,7 @@ def to_int(value: Any) -> int | None:
         return None
 
 
-def parse_duration_seconds(
-    duration: Any = None, *, duration_millis: Any = None
-) -> int | None:
+def parse_duration_seconds(duration: Any = None, *, duration_millis: Any = None) -> int | None:
     """Normalize a video duration to whole seconds.
 
     `durationMillis` wins when present (it is a plain integer); otherwise `duration` is
@@ -86,10 +82,7 @@ def parse_duration_seconds(
         return None
     parts = {name: float(value or 0) for name, value in iso.groupdict().items()}
     total = (
-        parts["days"] * 86_400
-        + parts["hours"] * 3600
-        + parts["minutes"] * 60
-        + parts["seconds"]
+        parts["days"] * 86_400 + parts["hours"] * 3600 + parts["minutes"] * 60 + parts["seconds"]
     )
     return int(total)
 
@@ -107,7 +100,7 @@ def _as_text(value: Any) -> str:
     return "" if value is None else str(value)
 
 
-def _items(raw: Mapping[str, Any], factory: Callable[[Mapping[str, Any]], T]) -> list[T]:
+def _items[T](raw: Mapping[str, Any], factory: Callable[[Mapping[str, Any]], T]) -> list[T]:
     return [factory(item) for item in raw.get("items") or [] if isinstance(item, Mapping)]
 
 

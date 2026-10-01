@@ -12,7 +12,6 @@ Nothing here formats or truncates transcripts — tools (Batch 4) slice the full
 import logging
 import re
 from collections.abc import Callable, Sequence
-from typing import TypeVar
 
 import anyio
 import requests
@@ -60,8 +59,6 @@ _VIDEO_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{11}")
 #: the one-line message discipline (section 11).
 _REJECTED_ID_MAX_CHARS = 15
 
-T = TypeVar("T")
-
 
 class TranscriptSnippet(BaseModel):
     """One caption segment. `duration` is on-screen time, not speech length, so segments overlap."""
@@ -99,7 +96,8 @@ class TranscriptTrackList(BaseModel):
 
 
 def build_proxy_config(settings: Settings) -> ProxyConfig | None:
-    """Map proxy settings onto a library proxy config, or `None` for a direct connection (section 9).
+    """Map proxy settings onto a library proxy config, or `None` for a direct connection
+    (section 9).
 
     Webshare wins when both its credentials are set; otherwise a generic proxy is used if either
     proxy URL is set.
@@ -123,8 +121,9 @@ def _error(code: TranscriptErrorCode, video_id: str, cause: str) -> TranscriptEr
     """Build a short, model-facing error: one line, video ID, cause.
 
     `str(error)` prefixes the taxonomy code. The library's own messages are multi-line blobs
-    ending in a GitHub-issue referral, so they are never surfaced (section 11, research brief section B4). The
-    echoed input is truncated: rejected input can be arbitrarily long (a pasted URL, a blob).
+    ending in a GitHub-issue referral, so they are never surfaced (section 11, research brief
+    section B4). The echoed input is truncated: rejected input can be arbitrarily long (a pasted
+    URL, a blob).
     """
     return TranscriptError(code, f"video {_display_id(video_id)}: {cause}")
 
@@ -239,7 +238,7 @@ def _api() -> YouTubeTranscriptApi:
     return YouTubeTranscriptApi(proxy_config=build_proxy_config(get_settings()))
 
 
-async def _offloaded(worker: Callable[[], T], *, video_id: str, what: str) -> T:
+async def _offloaded[T](worker: Callable[[], T], *, video_id: str, what: str) -> T:
     """Run a blocking library call in a worker thread under an explicit deadline.
 
     `abandon_on_cancel=True` is required, not cosmetic: the default shields the await from
@@ -269,16 +268,14 @@ async def _offloaded(worker: Callable[[], T], *, video_id: str, what: str) -> T:
         else:
             logger.exception("unexpected transcript failure for video %s", video_id)
             cause = "unexpected youtube-transcript-api error"
-        raise _error(TranscriptErrorCode.UPSTREAM_ERROR, video_id, f"{what} failed: {cause}") from exc
+        raise _error(
+            TranscriptErrorCode.UPSTREAM_ERROR, video_id, f"{what} failed: {cause}"
+        ) from exc
 
 
-def _fetch_sync(
-    video_id: str, languages: tuple[str, ...], preserve_formatting: bool
-) -> Transcript:
+def _fetch_sync(video_id: str, languages: tuple[str, ...], preserve_formatting: bool) -> Transcript:
     """Blocking library call: fetch and convert to the public model."""
-    fetched = _api().fetch(
-        video_id, languages=languages, preserve_formatting=preserve_formatting
-    )
+    fetched = _api().fetch(video_id, languages=languages, preserve_formatting=preserve_formatting)
     return Transcript(
         video_id=fetched.video_id,
         language=fetched.language,
@@ -319,9 +316,10 @@ async def fetch_transcript(
     """Fetch a video's transcript, preferring `languages` in order.
 
     `languages` defaults to the configured transcript language. A cached transcript never
-    expires (a published transcript does not change, section 14) and is keyed by the language that was
-    actually returned plus a `styled` marker when `preserve_formatting` is set, so a caller can
-    never be served the other style variant. Raises `TranscriptError` for every failure mode —
+    expires (a published transcript does not change, section 14) and is keyed by the language
+    that was actually returned plus a `styled` marker when `preserve_formatting` is set, so a
+    caller can never be served the other style variant. Raises `TranscriptError` for every
+    failure mode —
     never the library's own.
     """
     _validate_video_id(video_id)
@@ -360,9 +358,7 @@ async def list_transcript_tracks(
     _validate_video_id(video_id)
 
     cached = (
-        await cache.get(namespaced("transcript_tracks", video_id))
-        if cache is not None
-        else None
+        await cache.get(namespaced("transcript_tracks", video_id)) if cache is not None else None
     )
     if cached is not None:
         return TranscriptTrackList.model_validate(cached)

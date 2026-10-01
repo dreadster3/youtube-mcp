@@ -17,9 +17,11 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "mypy",
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
+    "ruff",
 ]
 
 [build-system]
@@ -36,3 +38,21 @@ packages = ["src/youtube_mcp"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "--cov=youtube_mcp --cov-report=term-missing -q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Pragmatic, not exhaustive: correctness (E/W/F), import order (I), simplification (SIM),
+# pyupgrade (UP) and bugbears (B). No opinionated style families (D, ANN, PL) yet.
+select = ["E", "W", "F", "I", "SIM", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.13"
+files = ["src/youtube_mcp"]
+
+[[tool.mypy.overrides]]
+module = ["youtube_mcp.*"]
+strict = true

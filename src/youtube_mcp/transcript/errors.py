@@ -21,9 +21,7 @@ class TranscriptErrorCode(StrEnum):
 
 #: Codes worth retrying later. Everything else is terminal — the model should stop
 #: asking rather than burn a retry loop.
-RETRYABLE_CODES = frozenset(
-    {TranscriptErrorCode.IP_BLOCKED, TranscriptErrorCode.UPSTREAM_ERROR}
-)
+RETRYABLE_CODES = frozenset({TranscriptErrorCode.IP_BLOCKED, TranscriptErrorCode.UPSTREAM_ERROR})
 
 
 class TranscriptError(Exception):

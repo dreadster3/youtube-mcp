@@ -1,4 +1,4 @@
-"""Quota counter tests (section 5.3/section 5.4, section 16: "unit-test the quota counter exhaustively")."""
+"""Quota counter tests (section 5.3/5.4, section 16: "unit-test the quota counter exhaustively")."""
 
 from __future__ import annotations
 
@@ -134,7 +134,7 @@ def test_low_remaining_hook_fires_once_per_bucket_per_day():
         counter.consume(QuotaBucket.SEARCH)
 
     assert warnings == [(QuotaBucket.SEARCH, 10)]
-    assert 10 <= 100 * LOW_REMAINING_FRACTION
+    assert 100 * LOW_REMAINING_FRACTION >= 10
 
 
 def test_low_remaining_hook_ignores_other_buckets():

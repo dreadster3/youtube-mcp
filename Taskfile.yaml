@@ -1,0 +1,83 @@
+version: "3"
+
+# One-command CI actions.
+#
+# go-task has no `.PHONY`: a task always runs unless it declares `sources`/`generates`/`status`.
+# Nothing here declares them — every task is a gate, and a cache-skipped gate is a lie.
+#
+# Runner: `task <name>` if go-task is installed, else `uvx --from go-task-bin task <name>`
+# (`uvx` works anywhere uv exists — note go-task is published as `go-task-bin`, not `go-task`).
+#
+# `ci` is the local gate and stays fast and network-free; docker lives in `docker-build`,
+# `docker-smoke` and `release` because it is the one slow, network-touching action here.
+
+vars:
+  # Image tag from the git tag. `--always` degrades to a bare SHA on an untagged checkout, so
+  # an untagged tree tags the image `youtube-mcp:<sha>` instead of failing; `dev` if even that
+  # fails (no git, no commits).
+  TAG:
+    sh: git describe --tags --always 2>/dev/null || echo dev
+  IMAGE: youtube-mcp:{{.TAG}}
+
+tasks:
+  default:
+    aliases:
+      - help
+    cmd: task -l
+    silent: true
+
+  install:
+    desc: Sync the project environment including dev dependencies
+    cmds:
+      - uv sync
+
+  lint:
+    desc: ruff check — strict
+    cmds:
+      - uv run ruff check .
+
+  fmt:
+    desc: ruff format — rewrites files
+    cmds:
+      - uv run ruff format .
+
+  fmt-check:
+    desc: ruff format --check — CI mode, non-mutating
+    cmds:
+      - uv run ruff format --check .
+
+  typecheck:
+    desc: mypy — strict on src/youtube_mcp
+    cmds:
+      - uv run mypy
+
+  test:
+    desc: pytest — the full offline suite
+    cmds:
+      - uv run pytest
+
+  coverage:
+    desc: pytest with an explicit per-line coverage report
+    cmds:
+      - uv run pytest --cov=youtube_mcp --cov-report=term-missing
+
+  lock-check:
+    desc: Verify uv.lock matches pyproject.toml
+    cmds:
+      - uv lock --check
+
+  check:
+    desc: CI gate — lint + fmt-check + lock-check + test (no docker; `release` adds that)
+    cmds:
+      - task: lint
+      - task: fmt-check
+      - task: lock-check
+      - task: test
+
+  docker-build:
+    desc: Build the container image as youtube-mcp:<git tag, else sha, else dev>
+    run: once
+    cmds:
+      - cmd: docker build -f deploy/Dockerfile -t {{.IMAGE}} .
+        timeout: 15m
+      - 'echo "built {{.IMAGE}}"'

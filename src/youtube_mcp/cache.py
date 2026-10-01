@@ -90,7 +90,8 @@ class Cache:
         expires_at = float("inf") if ttl == 0 else self._clock() + ttl
         await self._db.execute(
             "INSERT INTO cache (key, value, expires_at) VALUES (?, ?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at",
+            "ON CONFLICT(key) DO UPDATE SET "
+            "value = excluded.value, expires_at = excluded.expires_at",
             (key, json.dumps(value, ensure_ascii=False), expires_at),
         )
         await self._db.commit()

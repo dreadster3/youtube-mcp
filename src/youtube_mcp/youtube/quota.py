@@ -88,10 +88,13 @@ class QuotaCounter:
             raise QuotaExceeded(bucket, cap)
         self._used[bucket] += units
         remaining = cap - self._used[bucket]
-        if self._on_low_remaining is not None and bucket not in self._warned:
-            if remaining <= cap * LOW_REMAINING_FRACTION:
-                self._warned.add(bucket)
-                self._on_low_remaining(bucket, remaining)
+        if (
+            self._on_low_remaining is not None
+            and bucket not in self._warned
+            and remaining <= cap * LOW_REMAINING_FRACTION
+        ):
+            self._warned.add(bucket)
+            self._on_low_remaining(bucket, remaining)
         return remaining
 
     def remaining(self, bucket: QuotaBucket) -> int:

@@ -40,9 +40,7 @@ def test_retryability(code: TranscriptErrorCode, retryable: bool) -> None:
 
 
 def test_retryable_codes_set_matches_table() -> None:
-    assert RETRYABLE_CODES == {
-        code for code, retryable in EXPECTED_RETRYABLE.items() if retryable
-    }
+    assert {code for code, retryable in EXPECTED_RETRYABLE.items() if retryable} == RETRYABLE_CODES
 
 
 def test_is_an_exception_with_code_in_str() -> None:

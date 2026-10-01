@@ -1,10 +1,9 @@
 """Cache TTL, expiry and JSON round-trip behaviour (section 14)."""
 
-import pytest
-
 from collections.abc import AsyncIterator
 
 import aiosqlite
+import pytest
 
 from youtube_mcp.cache import Cache, namespaced
 

@@ -172,9 +172,7 @@ async def test_server_instructions_state_the_real_quota_buckets(
     assert "everything else shares 10,000" not in instructions
 
 
-async def test_no_tool_has_a_dislike_field(
-    settings: Settings, resources: ServerResources
-) -> None:
+async def test_no_tool_has_a_dislike_field(settings: Settings, resources: ServerResources) -> None:
     """section 5.2 is about the *field*: no schema may offer one, whatever the prose says."""
     mcp = build_mcp(settings, resources)
 
@@ -285,9 +283,7 @@ async def test_channel_tool_returns_structured_content(
 # ----------------------------------------------------------------------------- /health
 
 
-async def test_health_route_returns_ok(
-    settings: Settings, resources: ServerResources
-) -> None:
+async def test_health_route_returns_ok(settings: Settings, resources: ServerResources) -> None:
     app = _app_with(settings, resources)
 
     async with httpx.AsyncClient(
@@ -433,7 +429,7 @@ def test_create_app_builds_a_stateless_http_app(settings: Settings, monkeypatch)
 
 
 def test_create_app_requires_an_api_key_at_factory_time(clean_env: None) -> None:
-    """section 12 fail-fast: a misconfigured pod must crash at startup, not on the first tool call."""
+    """section 12 fail-fast: a misconfigured pod must crash at startup, not on first tool call."""
     settings = Settings(_env_file=None, youtube_api_key=None)
 
     with pytest.raises(MissingApiKeyError, match="YOUTUBE_API_KEY"):

@@ -66,7 +66,7 @@ class ServerResources:
 
 
 def _low_remaining_logger(bucket: QuotaBucket, remaining: int) -> None:
-    """Warn once per bucket per quota day when it drops to 10% or less (section 5.3, batch-2 hook)."""
+    """Warn once per bucket per quota day when it drops to 10% or less (section 5.3, batch-2)."""
     logger.warning(
         "quota bucket %s down to %d units remaining for today (resets midnight US/Pacific)",
         bucket,
@@ -109,9 +109,7 @@ def build_mcp(settings: Settings, resources: ServerResources) -> FastMCP:
     @mcp.custom_route("/health", methods=["GET"])
     async def health(request: Request) -> JSONResponse:
         """Liveness/readiness probe. No auth, no external calls (custom routes bypass auth)."""
-        quota = {
-            bucket.value: resources.client.quota.remaining(bucket) for bucket in QuotaBucket
-        }
+        quota = {bucket.value: resources.client.quota.remaining(bucket) for bucket in QuotaBucket}
         return JSONResponse(
             {
                 "status": "ok",
@@ -155,9 +153,10 @@ def create_app(
 
     resolved_client = client or build_client(resolved)
     resolved_cache = cache or Cache(str(resolved.database_path))
-    mcp = build_mcp(resolved, ServerResources(
-        cache=resolved_cache, client=resolved_client, owns_client=client is None
-    ))
+    mcp = build_mcp(
+        resolved,
+        ServerResources(cache=resolved_cache, client=resolved_client, owns_client=client is None),
+    )
     return mcp.http_app(stateless_http=resolved.fastmcp_stateless_http)
 
 
@@ -172,8 +171,8 @@ def main() -> None:
         # a `docker stop` waits out the grace period and SIGKILLs (measured: 10.2s). stdio itself
         # installs none — uvicorn supplies one on the http path. `os._exit` rather than
         # `sys.exit`: anyio's non-daemon stdin-reader thread never joins, so a graceful exit
-        # deadlocks in interpreter shutdown. The cache is SQLite (crash-safe journal, section 14) and
-        # ephemeral anyway, so skipping its close loses nothing.
+        # deadlocks in interpreter shutdown. The cache is SQLite (crash-safe journal, section 14)
+        # and ephemeral anyway, so skipping its close loses nothing.
         signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
         # SIGINT needs the same handler: the default KeyboardInterrupt unwinds out of `mcp.run()`
         # and then hits the very same interpreter-shutdown deadlock, so Ctrl-C on a local stdio

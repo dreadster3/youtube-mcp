@@ -22,8 +22,8 @@ from __future__ import annotations
 
 import random
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
-from datetime import datetime, timezone
-from typing import Any, Literal, Protocol, TypeVar
+from datetime import UTC, datetime
+from typing import Any, Literal, Protocol
 
 import anyio
 import httpx
@@ -241,10 +241,7 @@ class Paged(Protocol):
     next_page_token: str | None
 
 
-PageT = TypeVar("PageT", bound=Paged)
-
-
-async def iterate_pages(
+async def iterate_pages[PageT: Paged](
     fetch_page: Callable[[str | None], Awaitable[PageT]],
 ) -> AsyncIterator[PageT]:
     """Walk a paged method: `fetch_page` takes a page token and returns one page.
@@ -273,8 +270,8 @@ def _rfc3339(value: datetime | str) -> str:
     if isinstance(value, str):
         return value
     if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _join_parts(parts: Iterable[str]) -> str:
@@ -336,7 +333,7 @@ class YouTubeClient:
         if self._owns_client:
             await self._http.aclose()
 
-    async def __aenter__(self) -> "YouTubeClient":
+    async def __aenter__(self) -> YouTubeClient:
         return self
 
     async def __aexit__(self, *exc_info: object) -> None:
@@ -391,7 +388,7 @@ class YouTubeClient:
         """`Retry-After` when the server sent one, else capped exponential backoff + jitter."""
         if isinstance(retry_after, (int, float)):
             return min(float(retry_after), MAX_RETRY_AFTER_SECONDS)
-        base = min(BASE_BACKOFF_SECONDS * 2 ** (attempt - 1), MAX_BACKOFF_SECONDS)
+        base = min(BASE_BACKOFF_SECONDS * 2.0 ** (attempt - 1), MAX_BACKOFF_SECONDS)
         return min(base * random.uniform(0.5, 1.5), MAX_BACKOFF_SECONDS)
 
     # -- methods ------------------------------------------------------------------
@@ -477,9 +474,7 @@ class YouTubeClient:
 
         videos: list[models.Video] = []
         for chunk in chunks:
-            raw = await self._get(
-                "videos", {"part": _join_parts(parts), "id": ",".join(chunk)}
-            )
+            raw = await self._get("videos", {"part": _join_parts(parts), "id": ",".join(chunk)})
             videos.extend(models.videos_from_api(raw))
         return videos
 
@@ -506,6 +501,7 @@ class YouTubeClient:
         if channel_id is not None:
             params["id"] = channel_id
         else:
+            assert handle is not None  # the exactly-one guard above
             params["forHandle"] = handle.lstrip("@")
 
         self._quota.consume(QuotaBucket.SHARED)

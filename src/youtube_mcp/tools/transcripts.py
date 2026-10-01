@@ -306,8 +306,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
             language_code=transcript.language_code,
             is_generated=transcript.is_generated,
             segments=[
-                TranscriptSegment(text=s.text, start=s.start, duration=s.duration)
-                for s in snippets
+                TranscriptSegment(text=s.text, start=s.start, duration=s.duration) for s in snippets
             ],
             truncated=next_cursor is not None,
             next_cursor=next_cursor,

@@ -1,8 +1,9 @@
 """Shared pytest fixtures."""
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 from fastmcp import FastMCP
@@ -89,9 +90,7 @@ class StubYouTubeClient:
         return await self._respond("list_channel", kwargs)
 
     async def list_playlist_items(self, playlist_id: str, **kwargs: Any) -> Any:
-        return await self._respond(
-            "list_playlist_items", {"playlist_id": playlist_id, **kwargs}
-        )
+        return await self._respond("list_playlist_items", {"playlist_id": playlist_id, **kwargs})
 
     async def list_comment_threads(self, video_id: str, **kwargs: Any) -> Any:
         return await self._respond("list_comment_threads", {"video_id": video_id, **kwargs})

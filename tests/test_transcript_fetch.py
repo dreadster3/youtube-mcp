@@ -1,4 +1,4 @@
-"""Transcript fetching: taxonomy mapping, timeout, offload, caching, proxy wiring (section 7, section 11, section 14).
+"""Transcript fetching: taxonomy mapping, timeout, offload, caching, proxy wiring (section 7/11/14).
 
 The library is faked at the module boundary (`youtube_mcp.transcript.fetch.YouTubeTranscriptApi`)
 and `get_settings` is replaced with a default-configured `Settings`, so nothing here touches
@@ -90,21 +90,19 @@ class FakeTrack:
         self.language = language
         self.language_code = language_code
         self.is_generated = is_generated
-        self.translation_languages = [
-            _FakeTranslationLanguage(code) for code in translatable_to
-        ]
+        self.translation_languages = [_FakeTranslationLanguage(code) for code in translatable_to]
 
     @property
     def is_translatable(self) -> bool:
         return len(self.translation_languages) > 0
 
 
-def fetched(
-    *snippets: tuple[str, float, float], language_code: str = "en"
-) -> FetchedTranscript:
+def fetched(*snippets: tuple[str, float, float], language_code: str = "en") -> FetchedTranscript:
     """Build a real `FetchedTranscript` so the mapped fields are the library's own."""
     return FetchedTranscript(
-        snippets=[FetchedTranscriptSnippet(text, start, duration) for text, start, duration in snippets],
+        snippets=[
+            FetchedTranscriptSnippet(text, start, duration) for text, start, duration in snippets
+        ],
         video_id=VIDEO_ID,
         language="English",
         language_code=language_code,
@@ -282,7 +280,7 @@ async def test_track_listing_maps_the_same_taxonomy(
 
 
 async def test_429_ip_block_is_the_retryable_branch(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`_raise_http_errors` turns HTTP 429 into `IpBlocked` (research brief section B4, gotcha 11)."""
+    """`_raise_http_errors` turns HTTP 429 into `IpBlocked` (research brief B4, gotcha 11)."""
     assert issubclass(IpBlocked, RequestBlocked)  # the fold the taxonomy depends on
     patch_api(monkeypatch, FakeApi(error=IpBlocked(VIDEO_ID)))
 
@@ -326,16 +324,16 @@ async def test_unmapped_library_error_maps_and_warns(
     """An unknown `CouldNotRetrieveTranscript` is upstream, and says so in the log."""
     patch_api(monkeypatch, FakeApi(error=UnmappedLibraryError(VIDEO_ID)))
 
-    with caplog.at_level("WARNING", logger="youtube_mcp.transcript.fetch"):
-        with pytest.raises(TranscriptError) as raised:
-            await fetch_transcript(VIDEO_ID)
+    with (
+        caplog.at_level("WARNING", logger="youtube_mcp.transcript.fetch"),
+        pytest.raises(TranscriptError) as raised,
+    ):
+        await fetch_transcript(VIDEO_ID)
 
     assert raised.value.code is TranscriptErrorCode.UPSTREAM_ERROR
     assert "unmapped" in raised.value.message
     _assert_short_message(raised.value)
-    assert any(
-        "unmapped UnmappedLibraryError" in record.message for record in caplog.records
-    )
+    assert any("unmapped UnmappedLibraryError" in record.message for record in caplog.records)
 
 
 async def test_cookie_error_is_upstream_not_invalid_request(
@@ -371,9 +369,11 @@ async def test_truly_unexpected_error_logged_and_mapped(
         FakeApi(error=RuntimeError("boom\nwith a newline and a GitHub link")),
     )
 
-    with caplog.at_level("ERROR", logger="youtube_mcp.transcript.fetch"):
-        with pytest.raises(TranscriptError) as raised:
-            await fetch_transcript(VIDEO_ID)
+    with (
+        caplog.at_level("ERROR", logger="youtube_mcp.transcript.fetch"),
+        pytest.raises(TranscriptError) as raised,
+    ):
+        await fetch_transcript(VIDEO_ID)
 
     assert raised.value.code is TranscriptErrorCode.UPSTREAM_ERROR
     assert "unexpected" in raised.value.message
@@ -482,12 +482,15 @@ async def test_transcript_model_is_json_persistable(monkeypatch: pytest.MonkeyPa
     patch_api(monkeypatch, FakeApi(result=fetched(("hi", 0.0, 1.0))))
     transcript = await fetch_transcript(VIDEO_ID)
     assert Transcript.model_validate(transcript.model_dump()) == transcript
-    assert TranscriptTrackList.model_validate(
-        TranscriptTrackList(video_id=VIDEO_ID, tracks=[]).model_dump()
-    ).tracks == []
+    assert (
+        TranscriptTrackList.model_validate(
+            TranscriptTrackList(video_id=VIDEO_ID, tracks=[]).model_dump()
+        ).tracks
+        == []
+    )
 
 
-# --- timeout + offload (section 7.1) ---------------------------------------------------------------
+# --- timeout + offload (section 7.1) ----------------------------------------------------------
 
 
 async def test_timeout_fires_and_no_long_sleep_is_needed(
@@ -549,7 +552,7 @@ async def test_fetch_is_offloaded_so_the_loop_ticks(monkeypatch: pytest.MonkeyPa
 
 
 async def test_fresh_api_instance_per_call(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Instances own a `requests.Session` and are not thread-safe — one per call (research brief section B1)."""
+    """Instances own a `requests.Session` and are not thread-safe — one per call (brief B1)."""
     factory = patch_api(monkeypatch, FakeApi(result=fetched()), FakeApi(result=fetched()))
 
     await fetch_transcript(VIDEO_ID)
@@ -669,9 +672,7 @@ async def test_styled_variant_is_not_served_from_a_default_variant_cache_hit(
     assert styled_api.fetch_calls == [(VIDEO_ID, ("en",), True)]
 
 
-async def test_tracks_are_cached(
-    monkeypatch: pytest.MonkeyPatch, opened_cache: Cache
-) -> None:
+async def test_tracks_are_cached(monkeypatch: pytest.MonkeyPatch, opened_cache: Cache) -> None:
     api = FakeApi(list_result=[FakeTrack("English", "en")])
     patch_api(monkeypatch, api)
 
@@ -683,9 +684,7 @@ async def test_tracks_are_cached(
     assert stored["tracks"][0]["language_code"] == "en"
 
 
-async def test_errors_are_not_cached(
-    monkeypatch: pytest.MonkeyPatch, opened_cache: Cache
-) -> None:
+async def test_errors_are_not_cached(monkeypatch: pytest.MonkeyPatch, opened_cache: Cache) -> None:
     """A failed fetch must not poison the cache with an empty transcript."""
     patch_api(monkeypatch, FakeApi(error=TranscriptsDisabled(VIDEO_ID)))
 
@@ -707,7 +706,7 @@ async def test_cacheless_calls_work(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(second.list_calls) == 1
 
 
-# --- proxy wiring (section 9, research brief section B6) --------------------------------------------------------
+# --- proxy wiring (section 9, research brief B6) ----------------------------------------------
 
 
 def test_build_proxy_config_is_none_by_default() -> None:

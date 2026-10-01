@@ -3,8 +3,8 @@
 Seven tools over the Batch-2 client. This module owns the things the client deliberately does
 not: the uploads-playlist walk, the stats cache (TTL from `CACHE_TTL_SECONDS`, section 12), and the
 model-facing wording of quota cost. Descriptions are load-bearing — they are the LLM's only
-documentation (section 8), so each one states its bucket where a bucket applies (section 5.3), and the scarce
-`search.list` bucket is called out as scarce.
+documentation (section 8), so each one states its bucket where a bucket applies (section 5.3),
+and the scarce `search.list` bucket is called out as scarce.
 
 Quota doctrine, in one place:
 
@@ -350,6 +350,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
     # Registered by hand, not with `@mcp.tool`: the description has to carry the *configured*
     # stats TTL, and an f-string is not a docstring (PEP 257 wants a plain literal), so the
     # placeholder is filled in here. Every other tool keeps the decorator.
+    assert youtube_get_video_stats.__doc__ is not None  # always a literal above
     youtube_get_video_stats.__doc__ = youtube_get_video_stats.__doc__.format(
         stats_ttl=deps.settings.cache_ttl_seconds
     )

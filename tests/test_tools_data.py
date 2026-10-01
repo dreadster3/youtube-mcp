@@ -10,7 +10,7 @@ envelopes from `tests/fixtures/`.
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import aiosqlite
@@ -152,7 +152,7 @@ async def test_get_video_stats_rejects_more_than_50_ids() -> None:
 
 async def test_search_videos_passes_every_documented_filter() -> None:
     mcp, stub = make_test_server(search_videos=models.SearchResults())
-    published_after = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    published_after = datetime(2024, 1, 1, tzinfo=UTC)
 
     await call_tool(
         mcp,
@@ -194,15 +194,13 @@ async def test_search_videos_accepts_an_offset_datetime_string() -> None:
         {"query": "x", "published_before": "2024-06-01T12:00:00+00:00"},
     )
 
-    assert stub.kwargs()["published_before"] == datetime(2024, 6, 1, 12, tzinfo=timezone.utc)
+    assert stub.kwargs()["published_before"] == datetime(2024, 6, 1, 12, tzinfo=UTC)
 
 
 async def test_search_videos_rejects_out_of_range_max_results() -> None:
     mcp, stub = make_test_server(search_videos=models.SearchResults())
 
-    message = await call_error(
-        mcp, "youtube_search_videos", {"query": "x", "max_results": 51}
-    )
+    message = await call_error(mcp, "youtube_search_videos", {"query": "x", "max_results": 51})
 
     assert "less than or equal to 50" in message
     assert stub.calls == []
@@ -233,9 +231,7 @@ async def test_search_videos_returns_page_token() -> None:
 
 
 async def test_get_video_stats_surfaces_partial_failure_as_data() -> None:
-    response = models.BatchStatsResponse.from_api(
-        fixture("batch_get_stats_partial_failure.json")
-    )
+    response = models.BatchStatsResponse.from_api(fixture("batch_get_stats_partial_failure.json"))
     succeeded = [item.video_id for item in response.items]
     failed = response.summary.failed_video_ids
     mcp, _ = make_test_server(batch_get_stats=response)
@@ -277,7 +273,9 @@ async def test_get_video_stats_caches_only_the_misses(
     known = payload.items[0].video_id
 
     await call_tool(mcp, "youtube_get_video_stats", {"video_ids": [known]})
-    stub.responses["batch_get_stats"] = models.BatchStatsResponse(items=[], summary=models.BatchStatsSummary())
+    stub.responses["batch_get_stats"] = models.BatchStatsResponse(
+        items=[], summary=models.BatchStatsSummary()
+    )
     result = await call_tool(mcp, "youtube_get_video_stats", {"video_ids": [known, "brand-new"]})
 
     assert stub.calls[1][1]["video_ids"] == ["brand-new"]
@@ -317,7 +315,7 @@ async def test_get_video_stats_description_states_the_configured_ttl(tmp_path) -
     description = " ".join(tools["youtube_get_video_stats"].description.split())
     assert "~7 seconds (the server's `CACHE_TTL_SECONDS`; default 3600)" in description
     # `0` is a legal value meaning no expiry, so the description must not read as "~0 seconds".
-    assert "0 means never expires, not \"zero seconds\"" in description
+    assert '0 means never expires, not "zero seconds"' in description
     assert "five minutes" not in description
 
 
@@ -465,9 +463,7 @@ def playlist_page(items: int, next_page_token: str | None) -> models.PlaylistIte
 
 
 def channel_with_uploads(uploads: str | None = UPLOADS_ID) -> models.Channel:
-    return models.Channel(
-        channel_id=CHANNEL_ID, title="T", uploads_playlist_id=uploads
-    )
+    return models.Channel(channel_id=CHANNEL_ID, title="T", uploads_playlist_id=uploads)
 
 
 async def test_list_channel_videos_resolves_uploads_playlist_then_walks() -> None:
@@ -560,9 +556,7 @@ async def test_channel_walk_pages_when_more_are_needed() -> None:
         seen.append(token)
         return pages["first" if token is None else None]
 
-    mcp, _ = make_test_server(
-        list_channel=channel_with_uploads(), list_playlist_items=make_page
-    )
+    mcp, _ = make_test_server(list_channel=channel_with_uploads(), list_playlist_items=make_page)
 
     result = await call_tool(
         mcp, "youtube_list_channel_videos", {"channel_id": CHANNEL_ID, "max_results": 3}
@@ -588,9 +582,7 @@ async def test_channel_walk_request_size_is_capped_at_50_per_page() -> None:
 async def test_list_channel_videos_reports_a_missing_channel_cleanly() -> None:
     mcp, _ = make_test_server(list_channel=None)
 
-    message = await call_error(
-        mcp, "youtube_list_channel_videos", {"channel_id": CHANNEL_ID}
-    )
+    message = await call_error(mcp, "youtube_list_channel_videos", {"channel_id": CHANNEL_ID})
 
     assert "no channel found for id" in message
     assert "youtube_get_channel" in message
@@ -599,9 +591,7 @@ async def test_list_channel_videos_reports_a_missing_channel_cleanly() -> None:
 async def test_list_channel_videos_reports_a_channel_without_uploads_playlist() -> None:
     mcp, _ = make_test_server(list_channel=channel_with_uploads(uploads=None))
 
-    message = await call_error(
-        mcp, "youtube_list_channel_videos", {"channel_id": CHANNEL_ID}
-    )
+    message = await call_error(mcp, "youtube_list_channel_videos", {"channel_id": CHANNEL_ID})
 
     assert "exposes no uploads playlist" in message
 
@@ -643,9 +633,7 @@ async def test_list_categories_region_defaults_to_none() -> None:
         (UpstreamError("boom"), "failed upstream"),
     ],
 )
-async def test_client_errors_map_to_model_facing_messages(
-    error: Exception, expected: str
-) -> None:
+async def test_client_errors_map_to_model_facing_messages(error: Exception, expected: str) -> None:
     mcp, _ = make_test_server(list_video_categories=error)
 
     message = await call_error(mcp, "youtube_list_categories", {})
@@ -680,9 +668,7 @@ async def test_rate_limit_error_says_retry_shortly() -> None:
 
 async def test_local_quota_exhaustion_names_our_own_budget() -> None:
     """`quota.QuotaExceeded` is our accounting, not Google's — say so (section 5.4)."""
-    mcp, _ = make_test_server(
-        search_videos=QuotaExceeded(QuotaBucket.SEARCH, 100)
-    )
+    mcp, _ = make_test_server(search_videos=QuotaExceeded(QuotaBucket.SEARCH, 100))
 
     message = await call_error(mcp, "youtube_search_videos", {"query": "x"})
 
@@ -719,9 +705,7 @@ async def test_unexpected_exception_is_masked_and_logged(
 async def test_batch_get_stats_partial_failure_is_logged(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    response = models.BatchStatsResponse.from_api(
-        fixture("batch_get_stats_partial_failure.json")
-    )
+    response = models.BatchStatsResponse.from_api(fixture("batch_get_stats_partial_failure.json"))
     mcp, _ = make_test_server(batch_get_stats=response)
 
     with caplog.at_level("WARNING"):

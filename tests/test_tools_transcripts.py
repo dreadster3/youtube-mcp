@@ -8,8 +8,6 @@ truncation/window arithmetic, the cursor contract and the error translation — 
 
 from __future__ import annotations
 
-from typing import Callable
-
 import pytest
 from fastmcp import Client
 
@@ -210,9 +208,7 @@ async def test_get_transcript_cursor_past_the_end_returns_empty_untruncated(
     patch_fetch(monkeypatch, make_transcript("aaaaa", "bbbbb"))
     mcp, _ = make_test_server(settings=Settings(_env_file=None, response_limit=11))
 
-    result = await call_tool(
-        mcp, "youtube_get_transcript", {"video_id": VIDEO_ID, "cursor": 999}
-    )
+    result = await call_tool(mcp, "youtube_get_transcript", {"video_id": VIDEO_ID, "cursor": 999})
 
     assert result["text"] == ""
     assert result["next_cursor"] is None
@@ -350,9 +346,7 @@ async def test_page_start_marker_is_the_segments_own_start(
 async def test_timestamped_transcript_returns_segments_and_pages(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    patch_fetch(
-        monkeypatch, make_transcript("aaaaa", "bbbbb", "ccccc", starts=[0.0, 2.0, 4.0])
-    )
+    patch_fetch(monkeypatch, make_transcript("aaaaa", "bbbbb", "ccccc", starts=[0.0, 2.0, 4.0]))
     mcp, _ = make_test_server(settings=Settings(_env_file=None, response_limit=11))
 
     page = await call_tool(mcp, "youtube_get_timestamped_transcript", {"video_id": VIDEO_ID})
@@ -377,9 +371,7 @@ async def test_timestamped_transcript_negative_cursor_starts_at_the_first_segmen
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A negative cursor must page from segment 0 — not re-emit the last segment first."""
-    patch_fetch(
-        monkeypatch, make_transcript("aaaaa", "bbbbb", "ccccc", starts=[0.0, 2.0, 4.0])
-    )
+    patch_fetch(monkeypatch, make_transcript("aaaaa", "bbbbb", "ccccc", starts=[0.0, 2.0, 4.0]))
     mcp, _ = make_test_server(settings=Settings(_env_file=None, response_limit=6))
 
     page = await call_tool(
@@ -479,9 +471,7 @@ async def test_list_transcript_languages_passes_through(
     patch_tracks(monkeypatch, listing)
     mcp, _ = make_test_server()
 
-    result = await call_tool(
-        mcp, "youtube_list_transcript_languages", {"video_id": VIDEO_ID}
-    )
+    result = await call_tool(mcp, "youtube_list_transcript_languages", {"video_id": VIDEO_ID})
 
     assert result["tracks"] == [
         {
@@ -564,9 +554,7 @@ async def test_transcript_error_on_track_listing_also_maps(
     patch_tracks(monkeypatch, error=TranscriptError(TranscriptErrorCode.NOT_FOUND, "no tracks"))
     mcp, _ = make_test_server()
 
-    message = await call_error(
-        mcp, "youtube_list_transcript_languages", {"video_id": VIDEO_ID}
-    )
+    message = await call_error(mcp, "youtube_list_transcript_languages", {"video_id": VIDEO_ID})
 
     assert message == "TRANSCRIPT_NOT_FOUND: no tracks"
 

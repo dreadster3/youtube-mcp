@@ -6,7 +6,7 @@ query params and status translation are exercised for real (no respx, no network
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -15,7 +15,6 @@ from conftest import FIXTURES, fixture
 from youtube_mcp.config import Settings
 from youtube_mcp.youtube import client as client_module
 from youtube_mcp.youtube.client import (
-    MAX_IDS_PER_CALL,
     CommentsDisabledError,
     InvalidRequestError,
     NotFoundError,
@@ -28,13 +27,12 @@ from youtube_mcp.youtube.client import (
 )
 from youtube_mcp.youtube.models import (
     BatchStatsResponse,
+    Channel,
     CommentThreadPage,
     PlaylistItemPage,
     SearchResults,
-    Channel,
 )
 from youtube_mcp.youtube.quota import QuotaBucket, QuotaCounter, QuotaExceeded
-
 
 
 class Recorder:
@@ -107,8 +105,8 @@ async def test_search_videos_sends_documented_params_and_key():
         "rick astley",
         max_results=20,
         order="viewCount",
-        published_after=datetime(2024, 1, 1, tzinfo=timezone.utc),
-        published_before=datetime(2024, 6, 1, 12, 30, tzinfo=timezone.utc),
+        published_after=datetime(2024, 1, 1, tzinfo=UTC),
+        published_before=datetime(2024, 6, 1, 12, 30, tzinfo=UTC),
         video_category_id="10",
         region_code="PT",
         safe_search="strict",
@@ -451,7 +449,7 @@ async def test_local_exhaustion_aborts_before_any_request():
 
 async def test_quota_counter_uses_injected_clock():
     handler = Recorder(ok({"items": []}))
-    now = datetime(2026, 5, 4, 12, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
     quota = QuotaCounter(clock=lambda: now.timestamp())
     client = make_client(handler, quota=quota)
 
@@ -495,7 +493,12 @@ async def test_error_translation_by_reason(fixture_name, status, expected):
 
 @pytest.mark.parametrize(
     ("status", "expected"),
-    [(400, InvalidRequestError), (404, NotFoundError), (429, RateLimitedError), (500, UpstreamError)],
+    [
+        (400, InvalidRequestError),
+        (404, NotFoundError),
+        (429, RateLimitedError),
+        (500, UpstreamError),
+    ],
 )
 def test_translate_error_falls_back_to_http_status(status, expected):
     """No `errors[]` array at all — the status decides (research A2.5 envelope variance)."""
@@ -607,7 +610,9 @@ async def test_transport_failure_becomes_retryable_upstream_error():
 
 async def test_429_then_200_retries_once_and_succeeds():
     handler = Recorder(
-        httpx.Response(429, headers={"Retry-After": "7"}, json=fixture("rate_limit_exceeded_429.json")),
+        httpx.Response(
+            429, headers={"Retry-After": "7"}, json=fixture("rate_limit_exceeded_429.json")
+        ),
         ok(fixture("video_categories.json")),
     )
     sleeps: list[float] = []
@@ -622,7 +627,9 @@ async def test_429_then_200_retries_once_and_succeeds():
 
 async def test_retry_after_is_capped():
     handler = Recorder(
-        httpx.Response(429, headers={"Retry-After": "9999"}, json=fixture("rate_limit_exceeded_429.json")),
+        httpx.Response(
+            429, headers={"Retry-After": "9999"}, json=fixture("rate_limit_exceeded_429.json")
+        ),
         ok({"items": []}),
     )
     sleeps: list[float] = []
@@ -694,7 +701,7 @@ async def test_5xx_is_retried_then_gives_up_after_max_attempts():
 
 
 async def test_retry_budget_is_small_and_explicit():
-    """Capped attempts — the Data API has no client-side retry loop to multiply (brief section B4/B6)."""
+    """Capped attempts — the Data API has no client-side retry loop to multiply (brief B4/B6)."""
     assert client_module.DEFAULT_MAX_ATTEMPTS == 3
     handler = Recorder(err(fixture("backend_error_503.json"), 503))
     client = make_client(handler)
@@ -758,7 +765,9 @@ async def test_iterate_pages_walks_tokens_and_stops():
     client = make_client(handler)
     seen: list[str | None] = []
 
-    async for page in iterate_pages(lambda token: client.list_playlist_items("PL1", page_token=token)):
+    async for page in iterate_pages(
+        lambda token: client.list_playlist_items("PL1", page_token=token)
+    ):
         seen.append(page.next_page_token)
 
     assert seen == ["CAEQAA", None]
