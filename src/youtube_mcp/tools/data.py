@@ -3,9 +3,8 @@
 Seven tools over the Batch-2 client. This module owns the things the client deliberately does
 not: the uploads-playlist walk, the stats cache (TTL from `CACHE_TTL_SECONDS`, §12), and the
 model-facing wording of quota cost. Descriptions are load-bearing — they are the LLM's only
-documentation (§8), so each one
-states its bucket where a bucket applies (§5.3), and the scarce `search.list` bucket is called
-out as scarce.
+documentation (§8), so each one states its bucket where a bucket applies (§5.3), and the scarce
+`search.list` bucket is called out as scarce.
 
 Quota doctrine, in one place:
 
@@ -41,7 +40,8 @@ logger = logging.getLogger(__name__)
 
 #: The channel→uploads-playlist mapping never changes, so it is cached without expiry (§14).
 #: Stats are the one mutable cache: their TTL is `settings.cache_ttl_seconds` (§12), applied
-#: at each write in `_stats_for`.
+#: at each write in `_stats_for`; a configured `0` there means no expiry (see `Cache.set`), which
+#: the stats description states so an operator's 0 cannot read as "zero seconds".
 UPLOADS_PLAYLIST_TTL_SECONDS = 0
 #: `playlistItems` accepts at most 50 per page; also the walk's page size.
 PLAYLIST_PAGE_SIZE = 50
@@ -332,9 +332,10 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         Accepts one ID or a list. Uses `videos:batchGetStats`, which has **its own
         10,000-call/day bucket** — this does not consume the shared pool that `youtube_get_video`
         draws on, so it is the cheap way to get numbers. Results are cached for ~{stats_ttl}
-        seconds (the server's `CACHE_TTL_SECONDS`; default 3600), so re-reading the same videos
-        costs no quota at all (`cached: true` only when every requested video's value came from
-        the cache; false otherwise).
+        seconds (the server's `CACHE_TTL_SECONDS`; default 3600), or cached forever when that
+        setting is 0 — there, 0 means never expires, not "zero seconds" — so re-reading the same
+        videos costs no quota at all (`cached: true` only when every requested video's value came
+        from the cache; false otherwise).
 
         A batch is not atomic: IDs that do not exist or are not publicly visible come back as
         `failed_video_ids`, with the successful ones still returned. Surface both — this is

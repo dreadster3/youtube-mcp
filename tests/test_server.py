@@ -569,6 +569,38 @@ def test_main_stdio_installs_a_sigterm_handler(monkeypatch, tmp_path: Path) -> N
     assert exited == [0]
 
 
+def test_main_stdio_installs_a_sigint_handler(monkeypatch, tmp_path: Path) -> None:
+    """SIGINT needs the same handler as SIGTERM: the local Ctrl-C path hangs without it.
+
+    Default `KeyboardInterrupt` unwinds out of `mcp.run()` and then blocks in interpreter
+    shutdown on the same non-daemon stdin-reader thread, so `uv run youtube-mcp` in a terminal
+    (the README Quick start) needs SIGKILL to die — measured, no second-Ctrl-C escape.
+    """
+    stdio_settings = Settings(
+        _env_file=None,
+        youtube_api_key="k",
+        mcp_transport="stdio",
+        database_path=tmp_path / "cache.db",
+    )
+    registered: list[tuple[Any, Any]] = []
+    exited: list[int] = []
+    monkeypatch.setattr(server_module, "get_settings", lambda: stdio_settings)
+    monkeypatch.setattr(server_module.FastMCP, "run", lambda self, **kwargs: None)
+    monkeypatch.setattr(
+        server_module.signal,
+        "signal",
+        lambda sig, handler: registered.append((sig, handler)),
+    )
+    monkeypatch.setattr(server_module.os, "_exit", lambda code: exited.append(code))
+
+    main()
+
+    handlers = [handler for sig, handler in registered if sig == signal.SIGINT]
+    assert handlers, f"no SIGINT handler registered: {registered}"
+    handlers[0](signal.SIGINT, None)
+    assert exited == [0]
+
+
 def test_main_http_uses_uvicorn_with_the_factory(monkeypatch, tmp_path: Path) -> None:
     """The http path hands uvicorn the factory reference, not a pre-built app."""
     http_settings = Settings(

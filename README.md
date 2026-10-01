@@ -166,7 +166,7 @@ raises at startup, so a misconfigured launch dies immediately rather than on the
 | `MCP_PORT` | `8088` | HTTP listen port (HTTP mode only). |
 | `FASTMCP_STATELESS_HTTP` | `true` | See [HTTP mode](#optional-http-mode--container) — leave it true for replicas. |
 | `RESPONSE_LIMIT` | `50000` | Transcript truncation threshold, in characters. Cumulative-character policy, same for both variants. |
-| `CACHE_TTL_SECONDS` | `3600` | TTL for cached video statistics, in seconds. See [Caching](#caching). |
+| `CACHE_TTL_SECONDS` | `3600` | TTL for cached video statistics, in seconds. `0` means never expires, not "zero seconds" — see [Caching](#caching). |
 | `DATABASE_PATH` | `cache.db` | SQLite cache file. **Relative by default** — set an absolute path in a container. |
 | `WEBSHARE_PROXY_USERNAME` / `WEBSHARE_PROXY_PASSWORD` | unset | Webshare proxy for transcript fetching; password is a `SecretStr`. |
 | `HTTP_PROXY` / `HTTPS_PROXY` | unset | Generic proxy alternative. |
@@ -185,7 +185,7 @@ SQLite via `aiosqlite` — one file, no extra service. Redis is not worth a tena
 | Transcripts | `transcript:<video_id>:<lang>` (and `…:styled`) | forever — a published transcript does not change |
 | Transcript track lists | `transcript_tracks:<video_id>` | forever |
 | Channel → uploads playlist | `uploads_playlist:<channel_id>` | forever — it never changes |
-| Video stats | `video_stats:<video_id>` | `CACHE_TTL_SECONDS` (default 3600s) — view counts move |
+| Video stats | `video_stats:<video_id>` | `CACHE_TTL_SECONDS` (default 3600s; `0` = never expires) — view counts move |
 
 Why the split: transcripts and playlist mappings are **immutable** — a published transcript is
 published, and a channel's uploads playlist ID is assigned once — so re-fetching them can only ever
@@ -246,8 +246,11 @@ way), or straight from the CLI:
 uv run fastmcp list http://localhost:8088/mcp --transport http   # should list all 11 tools
 ```
 
-For stdio, the same call is `uv run fastmcp list --command "uv run youtube-mcp"` (with
-`YOUTUBE_API_KEY` in the environment), or drive the server from any client that already speaks it.
+For stdio, the same call is `uv run fastmcp list --command "env YOUTUBE_API_KEY=$YOUTUBE_API_KEY uv run youtube-mcp"`,
+or drive the server from any client that already speaks it. The `env` prefix is required: the MCP
+SDK spawns stdio children with a **sanitized** environment, so an exported `YOUTUBE_API_KEY` never
+reaches the server and it would fail fast on the key check. Clients configured with JSON pass `env`
+themselves and need no wrapper.
 
 1. **Known captions video** — `youtube_get_transcript` with `dQw4w9WgXcQ`. Expect text, a
    `language_code`, and `truncated: false`. Repeat the call: it should be served from cache and cost

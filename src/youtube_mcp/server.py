@@ -173,9 +173,12 @@ def main() -> None:
         # installs none — uvicorn supplies one on the http path. `os._exit` rather than
         # `sys.exit`: anyio's non-daemon stdin-reader thread never joins, so a graceful exit
         # deadlocks in interpreter shutdown. The cache is SQLite (crash-safe journal, §14) and
-        # ephemeral anyway, so skipping its close loses nothing. SIGINT needs nothing: the local
-        # Ctrl-C path is the default KeyboardInterrupt.
+        # ephemeral anyway, so skipping its close loses nothing.
         signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
+        # SIGINT needs the same handler: the default KeyboardInterrupt unwinds out of `mcp.run()`
+        # and then hits the very same interpreter-shutdown deadlock, so Ctrl-C on a local stdio
+        # process hangs indefinitely (measured; no second Ctrl-C escape). Same os._exit rationale.
+        signal.signal(signal.SIGINT, lambda *_: os._exit(0))
         # stdio cannot use the ASGI app; the factory's server object is the right unit here.
         # `transport` is explicit so an ambient FASTMCP_TRANSPORT can never redirect it.
         resources = ServerResources(

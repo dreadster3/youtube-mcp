@@ -316,6 +316,8 @@ async def test_get_video_stats_description_states_the_configured_ttl(tmp_path) -
     # Collapse the hard wrap: the sentence is split across lines in the docstring.
     description = " ".join(tools["youtube_get_video_stats"].description.split())
     assert "~7 seconds (the server's `CACHE_TTL_SECONDS`; default 3600)" in description
+    # `0` is a legal value meaning no expiry, so the description must not read as "~0 seconds".
+    assert "0 means never expires, not \"zero seconds\"" in description
     assert "five minutes" not in description
 
 
