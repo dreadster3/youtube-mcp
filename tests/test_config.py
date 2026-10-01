@@ -1,4 +1,4 @@
-"""Config parsing, defaults and fail-fast validation (§12)."""
+"""Config parsing, defaults and fail-fast validation (section 12)."""
 
 import pytest
 from pydantic import ValidationError

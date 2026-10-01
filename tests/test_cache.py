@@ -1,4 +1,4 @@
-"""Cache TTL, expiry and JSON round-trip behaviour (§14)."""
+"""Cache TTL, expiry and JSON round-trip behaviour (section 14)."""
 
 import pytest
 

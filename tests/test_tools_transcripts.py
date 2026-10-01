@@ -1,4 +1,4 @@
-"""Tool-logic tests for the transcript group (§8), offline.
+"""Tool-logic tests for the transcript group (section 8), offline.
 
 Every case drives the real tool functions through the `FastMCP` call path, with the
 Batch-3 layer stubbed at the `youtube_mcp.tools.transcripts` module boundary (that is where
@@ -533,7 +533,7 @@ async def test_transcript_errors_render_code_and_message(
 async def test_retry_hint_appears_only_for_retryable_codes(
     monkeypatch: pytest.MonkeyPatch, code: TranscriptErrorCode, retryable: bool
 ) -> None:
-    """The model must be able to tell "captions off" from "IP blocked — try later" (§11)."""
+    """The model must be able to tell "captions off" from "IP blocked — try later" (section 11)."""
     patch_fetch(monkeypatch, error=TranscriptError(code, "cause"))
     mcp, _ = make_test_server()
 

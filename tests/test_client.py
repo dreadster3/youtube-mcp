@@ -396,7 +396,7 @@ async def test_search_consumes_search_bucket_not_shared():
 
 
 async def test_stats_methods_consume_their_own_buckets():
-    """`batchGetStats` must not touch the shared pool (§5.3 quota-efficiency requirement)."""
+    """`batchGetStats` must not touch the shared pool (section 5.3 quota-efficiency requirement)."""
     handler = Recorder(ok(fixture("batch_get_stats.json")))
     quota = quota_counter()
     client = make_client(handler, quota=quota)
@@ -694,7 +694,7 @@ async def test_5xx_is_retried_then_gives_up_after_max_attempts():
 
 
 async def test_retry_budget_is_small_and_explicit():
-    """Capped attempts — the Data API has no client-side retry loop to multiply (§B4/B6)."""
+    """Capped attempts — the Data API has no client-side retry loop to multiply (brief section B4/B6)."""
     assert client_module.DEFAULT_MAX_ATTEMPTS == 3
     handler = Recorder(err(fixture("backend_error_503.json"), 503))
     client = make_client(handler)

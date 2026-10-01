@@ -1,4 +1,4 @@
-"""Quota counter tests (§5.3/§5.4, §16: "unit-test the quota counter exhaustively")."""
+"""Quota counter tests (section 5.3/section 5.4, section 16: "unit-test the quota counter exhaustively")."""
 
 from __future__ import annotations
 

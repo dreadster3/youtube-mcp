@@ -1,4 +1,4 @@
-"""Server-assembly tests (§13): tool surface, /health, factory gate, stdio dispatch, offline.
+"""Server-assembly tests (section 13): tool surface, /health, factory gate, stdio dispatch, offline.
 
 The server is driven two ways: through `build_mcp` with an in-memory FastMCP client (fast,
 covers the tools and their structured output) and through `create_app` with an ASGI transport
@@ -88,7 +88,7 @@ async def test_tools_list_exposes_exactly_the_eleven_namespaced_tools(
 async def test_every_tool_has_a_substantive_description(
     settings: Settings, resources: ServerResources
 ) -> None:
-    """Descriptions are the model's only documentation (§8), so short ones are a defect."""
+    """Descriptions are the model's only documentation (section 8), so short ones are a defect."""
     mcp = build_mcp(settings, resources)
 
     async with Client(mcp) as client:
@@ -147,7 +147,7 @@ async def test_comments_description_does_not_promise_reply_counts(
 async def test_dislike_unavailability_is_stated_on_both_stat_tools(
     settings: Settings, resources: ServerResources
 ) -> None:
-    """§5.2: say it plainly so the model stops asking."""
+    """section 5.2: say it plainly so the model stops asking."""
     mcp = build_mcp(settings, resources)
 
     async with Client(mcp) as client:
@@ -162,7 +162,7 @@ async def test_dislike_unavailability_is_stated_on_both_stat_tools(
 async def test_server_instructions_state_the_real_quota_buckets(
     settings: Settings, resources: ServerResources
 ) -> None:
-    """§5.3: batchGetStats has its own 10,000/day bucket — the instructions must say so."""
+    """section 5.3: batchGetStats has its own 10,000/day bucket — the instructions must say so."""
     mcp = build_mcp(settings, resources)
 
     instructions = mcp.instructions
@@ -175,7 +175,7 @@ async def test_server_instructions_state_the_real_quota_buckets(
 async def test_no_tool_has_a_dislike_field(
     settings: Settings, resources: ServerResources
 ) -> None:
-    """§5.2 is about the *field*: no schema may offer one, whatever the prose says."""
+    """section 5.2 is about the *field*: no schema may offer one, whatever the prose says."""
     mcp = build_mcp(settings, resources)
 
     async with Client(mcp) as client:
@@ -196,7 +196,7 @@ async def test_no_tool_has_a_dislike_field(
 async def test_pydantic_return_produces_structured_content(
     settings: Settings, resources: ServerResources
 ) -> None:
-    """§13: structured output, not pre-formatted prose."""
+    """section 13: structured output, not pre-formatted prose."""
     resources.client.responses["search_videos"] = models.SearchResults.from_api(
         {
             "items": [
@@ -239,7 +239,7 @@ async def test_category_tool_returns_structured_content(
 async def test_tool_error_arrives_as_an_error_result_not_a_protocol_error(
     settings: Settings, resources: ServerResources
 ) -> None:
-    """FastMCP returns ToolError as `isError`, never as a JSON-RPC failure (research §4)."""
+    """FastMCP returns ToolError as `isError`, never as a JSON-RPC failure (research section 4)."""
     resources.client.responses["search_videos"] = QuotaExceededError(
         "quotaExceeded", reason="quotaExceeded"
     )
@@ -304,7 +304,7 @@ async def test_health_route_returns_ok(
 async def test_health_reports_quota_remaining_as_approximate(
     settings: Settings, resources: ServerResources
 ) -> None:
-    """§5.4 + batch-2 S1: never present our counter as Google's exact accounting."""
+    """section 5.4 + batch-2 S1: never present our counter as Google's exact accounting."""
     resources.client.quota.consume(QuotaBucket.SEARCH)
     app = _app_with(settings, resources)
 
@@ -433,7 +433,7 @@ def test_create_app_builds_a_stateless_http_app(settings: Settings, monkeypatch)
 
 
 def test_create_app_requires_an_api_key_at_factory_time(clean_env: None) -> None:
-    """§12 fail-fast: a misconfigured pod must crash at startup, not on the first tool call."""
+    """section 12 fail-fast: a misconfigured pod must crash at startup, not on the first tool call."""
     settings = Settings(_env_file=None, youtube_api_key=None)
 
     with pytest.raises(MissingApiKeyError, match="YOUTUBE_API_KEY"):
@@ -535,7 +535,7 @@ def test_main_defaults_to_stdio(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_main_stdio_installs_a_sigterm_handler(monkeypatch, tmp_path: Path) -> None:
-    """PID 1 in a container namespace drops SIGTERM unless a handler exists (§15).
+    """PID 1 in a container namespace drops SIGTERM unless a handler exists (section 15).
 
     Without it, `docker stop` on a stdio container waits out the grace period and SIGKILLs
     (measured: 10.2s) — the http path gets uvicorn's handler for free. The handler must be
@@ -633,7 +633,7 @@ def test_main_http_uses_uvicorn_with_the_factory(monkeypatch, tmp_path: Path) ->
 
 
 def test_main_fails_fast_without_an_api_key(monkeypatch, clean_env: None) -> None:
-    """Both transports gate on the key before doing anything else (§12)."""
+    """Both transports gate on the key before doing anything else (section 12)."""
     keyless = Settings(_env_file=None, youtube_api_key=None)
     monkeypatch.setattr(server_module, "get_settings", lambda: keyless)
 

@@ -1,4 +1,4 @@
-"""Transcript error taxonomy (§11 of HANDOFF.md).
+"""Transcript error taxonomy (section 11 of HANDOFF.md).
 
 Closed set: every transcript failure maps to exactly one code, and the code decides
 whether a retry is worth attempting. Keep the string values stable — the MCP error

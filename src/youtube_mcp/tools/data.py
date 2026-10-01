@@ -1,9 +1,9 @@
-"""Data API tools (§8): search, videos, stats, comments, channel, channel videos, categories.
+"""Data API tools (section 8): search, videos, stats, comments, channel, channel videos, categories.
 
 Seven tools over the Batch-2 client. This module owns the things the client deliberately does
-not: the uploads-playlist walk, the stats cache (TTL from `CACHE_TTL_SECONDS`, §12), and the
+not: the uploads-playlist walk, the stats cache (TTL from `CACHE_TTL_SECONDS`, section 12), and the
 model-facing wording of quota cost. Descriptions are load-bearing — they are the LLM's only
-documentation (§8), so each one states its bucket where a bucket applies (§5.3), and the scarce
+documentation (section 8), so each one states its bucket where a bucket applies (section 5.3), and the scarce
 `search.list` bucket is called out as scarce.
 
 Quota doctrine, in one place:
@@ -38,8 +38,8 @@ from youtube_mcp.youtube.client import (
 
 logger = logging.getLogger(__name__)
 
-#: The channel→uploads-playlist mapping never changes, so it is cached without expiry (§14).
-#: Stats are the one mutable cache: their TTL is `settings.cache_ttl_seconds` (§12), applied
+#: The channel→uploads-playlist mapping never changes, so it is cached without expiry (section 14).
+#: Stats are the one mutable cache: their TTL is `settings.cache_ttl_seconds` (section 12), applied
 #: at each write in `_stats_for`; a configured `0` there means no expiry (see `Cache.set`), which
 #: the stats description states so an operator's 0 cannot read as "zero seconds".
 UPLOADS_PLAYLIST_TTL_SECONDS = 0
@@ -77,7 +77,7 @@ class BatchStatsResult(BaseModel):
 
 
 class CommentPage(BaseModel):
-    """A page of top-level comments. Replies are not returned (§8 v1)."""
+    """A page of top-level comments. Replies are not returned (section 8 v1)."""
 
     video_id: str
     items: list[models.Comment] = Field(default_factory=list)
@@ -165,7 +165,7 @@ async def _stats_for(deps: Deps, video_ids: list[str]) -> BatchStatsResult:
                     # mode="json": the cache is JSON-backed and `published_at` is a datetime.
                     item.model_dump(mode="json"),
                     # View counts move, so stats are the only cache with a real TTL — and it is
-                    # the operator's `CACHE_TTL_SECONDS`, not a constant here (§12).
+                    # the operator's `CACHE_TTL_SECONDS`, not a constant here (section 12).
                     ttl=deps.settings.cache_ttl_seconds,
                 )
 
@@ -181,7 +181,7 @@ async def _stats_for(deps: Deps, video_ids: list[str]) -> BatchStatsResult:
 
 
 async def _uploads_playlist_id(deps: Deps, channel_id: str) -> str:
-    """Resolve a channel's uploads playlist, from the cache when possible (§14).
+    """Resolve a channel's uploads playlist, from the cache when possible (section 14).
 
     `channels.list?part=contentDetails` costs one shared-pool unit, and the answer never
     changes, so the mapping is cached without expiry.

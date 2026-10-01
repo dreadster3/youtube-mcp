@@ -1,4 +1,4 @@
-"""Transcript error taxonomy (§11): every code, its retryability, and serialization."""
+"""Transcript error taxonomy (section 11): every code, its retryability, and serialization."""
 
 import json
 

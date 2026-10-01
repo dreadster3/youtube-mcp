@@ -1,4 +1,4 @@
-"""Per-bucket Data API quota accounting (§5.3, §5.4 of HANDOFF.md).
+"""Per-bucket Data API quota accounting (section 5.3, section 5.4 of HANDOFF.md).
 
 The API never tells you which bucket tripped, so we count locally: `search.list` has its
 own 100/day bucket, `videos:batchGetStats` its own 10,000/day bucket, and everything else
@@ -29,7 +29,7 @@ class QuotaBucket(StrEnum):
     SHARED = "shared"
 
 
-#: Daily unit caps (§5.3). Every method in scope costs 1 unit.
+#: Daily unit caps (section 5.3). Every method in scope costs 1 unit.
 CAPS: Mapping[QuotaBucket, int] = {
     QuotaBucket.SEARCH: 100,
     QuotaBucket.STATS: 10_000,

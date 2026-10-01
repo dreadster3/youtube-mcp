@@ -1,4 +1,4 @@
-"""SQLite-backed async TTL cache (§14 of HANDOFF.md).
+"""SQLite-backed async TTL cache (section 14 of HANDOFF.md).
 
 One file, one connection, JSON values. Transcripts, video stats and channel→uploads
 playlist mappings all go through here — no Redis, no extra service.

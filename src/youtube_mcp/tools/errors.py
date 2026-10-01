@@ -7,7 +7,7 @@ LLM can act on. Two rules hold everywhere here:
   by `as_tool_error` and logged at the call site; the model gets a generic message
   instead of a traceback or a library blob.
 - **Messages carry the distinction that decides behaviour** — "captions are off, give up"
-  versus "IP blocked, retry later" — never the raw exception text (§11).
+  versus "IP blocked, retry later" — never the raw exception text (section 11).
 
 The Data API error classes live in `youtube.client` and the transcript ones in
 `transcript.errors`; both are mapped here so the tools stay free of error plumbing.
@@ -29,7 +29,7 @@ from youtube_mcp.youtube.quota import QuotaExceeded
 logger = logging.getLogger(__name__)
 
 #: Every client failure gets a fixed, actionable one-liner. Quota and rate limiting must
-#: say what to *do* (§5.4): a model that retries an exhausted daily bucket burns the rest
+#: say what to *do* (section 5.4): a model that retries an exhausted daily bucket burns the rest
 #: of the budget for nothing.
 CLIENT_ERROR_MESSAGES: dict[type[client_module.YouTubeApiError], str] = {
     client_module.QuotaExceededError: (

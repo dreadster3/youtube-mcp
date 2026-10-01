@@ -1,4 +1,4 @@
-"""Configuration (§12 of HANDOFF.md) — one pydantic-settings model, read once at startup.
+"""Configuration (section 12 of HANDOFF.md) — one pydantic-settings model, read once at startup.
 
 Environment variables map case-insensitively onto field names (`MCP_HOST` -> `mcp_host`).
 A `.env` file is read if present; unset proxy vars stay `None`.
@@ -13,7 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class MissingApiKeyError(ValueError):
-    """Raised when the YouTube API key is required but unset (fail fast, §12)."""
+    """Raised when the YouTube API key is required but unset (fail fast, section 12)."""
 
 
 class Settings(BaseSettings):
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
         frozen=True,
     )
 
-    # YouTube Data API — a single key. Multi-key rotation is a policy violation (§5.3).
+    # YouTube Data API — a single key. Multi-key rotation is a policy violation (section 5.3).
     youtube_api_key: SecretStr | None = Field(
         default=None,
         description="YouTube Data API key. Required at startup.",
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     mcp_port: int = Field(default=8088, ge=1, le=65535)
     fastmcp_stateless_http: bool = Field(
         default=True,
-        description="Stateless HTTP so any replica can serve a request (§13)",
+        description="Stateless HTTP so any replica can serve a request (section 13)",
     )
 
     # Behaviour limits.
@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     database_path: Path = Field(default=Path("cache.db"), description="SQLite cache file")
     log_level: str = "INFO"
 
-    # Proxies — unset by default (residential connection, §9).
+    # Proxies — unset by default (residential connection, section 9).
     webshare_proxy_username: str | None = None
     webshare_proxy_password: SecretStr | None = None
     http_proxy: str | None = None
@@ -76,5 +76,5 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Read configuration once (§12)."""
+    """Read configuration once (section 12)."""
     return Settings()

@@ -96,7 +96,7 @@ def test_channel_shape_including_uploads_playlist():
     assert channel.video_count == 5900
     assert channel.view_count == 287000000
     assert channel.hidden_subscriber_count is False
-    # The whole point of contentDetails: the cheap channel→videos path (§5.3).
+    # The whole point of contentDetails: the cheap channel→videos path (section 5.3).
     assert channel.uploads_playlist_id == "UUx7I4zH7kz2Q4tU9mB0pX8aLw1Q"
 
 
@@ -309,7 +309,7 @@ def test_items_skips_non_mapping_entries():
     ],
 )
 def test_no_model_exposes_dislike_count(model):
-    """dislikeCount is private since 2021 (§5.2) — never model it, never infer it."""
+    """dislikeCount is private since 2021 (section 5.2) — never model it, never infer it."""
     fields = set(model.model_json_schema().get("properties", {}))
     assert not [field for field in fields if "dislike" in field.lower()]
     assert not [field for field in model.model_fields if "dislike" in field.lower()]

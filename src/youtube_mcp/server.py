@@ -1,4 +1,4 @@
-"""MCP server assembly (§13).
+"""MCP server assembly (section 13).
 
 The wiring lives in `create_app`, a factory: it reads configuration, builds the client and
 the cache, registers the tools and returns the ASGI app. Nothing at module level reads
@@ -6,7 +6,7 @@ settings, so importing this module never requires an API key — the fail-fast g
 (`Settings.require_api_key`) runs inside `create_app`/`main`, which is exactly when the
 operator starts the server.
 
-Two transports (§12), both entered through the `youtube-mcp` console script:
+Two transports (section 12), both entered through the `youtube-mcp` console script:
 
 - **stdio** (the default) — `uv run youtube-mcp` (`mcp.run(transport="stdio")`). This is how
   a local agent launches the server: it speaks MCP on the process's stdin/stdout, no port, no
@@ -66,7 +66,7 @@ class ServerResources:
 
 
 def _low_remaining_logger(bucket: QuotaBucket, remaining: int) -> None:
-    """Warn once per bucket per quota day when it drops to 10% or less (§5.3, batch-2 hook)."""
+    """Warn once per bucket per quota day when it drops to 10% or less (section 5.3, batch-2 hook)."""
     logger.warning(
         "quota bucket %s down to %d units remaining for today (resets midnight US/Pacific)",
         bucket,
@@ -83,7 +83,7 @@ def build_mcp(settings: Settings, resources: ServerResources) -> FastMCP:
 
     @asynccontextmanager
     async def lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
-        """Open the cache for the process lifetime (§14).
+        """Open the cache for the process lifetime (section 14).
 
         `Cache.get()` silently returns the default before `connect()`, so connecting here —
         before any request can be served — is what makes transcript and stats caching real
@@ -118,7 +118,7 @@ def build_mcp(settings: Settings, resources: ServerResources) -> FastMCP:
                 "server": SERVER_NAME,
                 "version": __version__,
                 # Our own accounting, not Google's: `stats` over-counts after a mid-batch
-                # failure, so a client must not treat these as exact (§5.4, review S1).
+                # failure, so a client must not treat these as exact (section 5.4, review S1).
                 "quota_remaining_approximate": quota,
             }
         )
@@ -128,7 +128,7 @@ def build_mcp(settings: Settings, resources: ServerResources) -> FastMCP:
 
 
 def build_client(settings: Settings) -> YouTubeClient:
-    """The owned Data API client, with the §5.3 low-quota warning wired in.
+    """The owned Data API client, with the section 5.3 low-quota warning wired in.
 
     Separate from `create_app` so the wiring is testable without an ASGI app — the warning
     hook only fires if the counter is constructed with it, and a silent regression there would
@@ -143,12 +143,12 @@ def create_app(
     client: YouTubeClient | None = None,
     cache: Cache | None = None,
 ) -> Any:
-    """Build the streamable-HTTP ASGI app (§13). This is the uvicorn `--factory` target.
+    """Build the streamable-HTTP ASGI app (section 13). This is the uvicorn `--factory` target.
 
     `settings` defaults to `get_settings()`. An injected `client` wins over one built from
     settings — that is the seam tests use to avoid the network — while an injected `cache`
     stands in for the SQLite file. The API key is required here, at startup, so a
-    misconfigured pod crashes immediately instead of on the first tool call (§12).
+    misconfigured pod crashes immediately instead of on the first tool call (section 12).
     """
     resolved = settings or get_settings()
     resolved.require_api_key()
@@ -162,7 +162,7 @@ def create_app(
 
 
 def main() -> None:
-    """Console entrypoint: dispatch on `MCP_TRANSPORT` (§12). Default is stdio."""
+    """Console entrypoint: dispatch on `MCP_TRANSPORT` (section 12). Default is stdio."""
     settings = get_settings()
     settings.require_api_key()
     logging.basicConfig(level=settings.log_level.upper())
@@ -172,7 +172,7 @@ def main() -> None:
         # a `docker stop` waits out the grace period and SIGKILLs (measured: 10.2s). stdio itself
         # installs none — uvicorn supplies one on the http path. `os._exit` rather than
         # `sys.exit`: anyio's non-daemon stdin-reader thread never joins, so a graceful exit
-        # deadlocks in interpreter shutdown. The cache is SQLite (crash-safe journal, §14) and
+        # deadlocks in interpreter shutdown. The cache is SQLite (crash-safe journal, section 14) and
         # ephemeral anyway, so skipping its close loses nothing.
         signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
         # SIGINT needs the same handler: the default KeyboardInterrupt unwinds out of `mcp.run()`

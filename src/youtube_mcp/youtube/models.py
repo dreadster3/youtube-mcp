@@ -9,7 +9,7 @@ Parsing is deliberately tolerant: YouTube encodes counts as JSON strings, and du
 arrives as protobuf seconds (`"213s"`), ISO-8601 (`"PT3M33S"`) or `durationMillis`, so a
 single odd field never fails a whole response.
 
-No `dislikeCount` anywhere — private since 2021-12-13 (§5.2).
+No `dislikeCount` anywhere — private since 2021-12-13 (section 5.2).
 """
 
 from __future__ import annotations
@@ -265,7 +265,7 @@ class PlaylistItemPage(BaseModel):
 
 
 class Video(BaseModel):
-    """A `videos.list` item (public metadata; no dislike count — §5.2)."""
+    """A `videos.list` item (public metadata; no dislike count — section 5.2)."""
 
     video_id: str
     title: str = ""

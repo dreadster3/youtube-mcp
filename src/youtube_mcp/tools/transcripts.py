@@ -1,4 +1,4 @@
-"""Transcript tools (§8): fetch, timestamped segments, track listing, in-transcript search.
+"""Transcript tools (section 8): fetch, timestamped segments, track listing, in-transcript search.
 
 Four tools over the Batch-3 transcript layer. The layer returns a whole `Transcript`; this
 module owns presentation — plain text, optional `[mm:ss]` markers, pagination by

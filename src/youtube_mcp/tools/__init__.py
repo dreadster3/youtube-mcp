@@ -1,4 +1,4 @@
-"""MCP tool surface (§8). One module per tool group, each exposing `register(mcp, deps)`.
+"""MCP tool surface (section 8). One module per tool group, each exposing `register(mcp, deps)`.
 
 `deps` carries the client, cache, settings and transcript config — tools are closures over
 it, so there is no module-level mutable state and the module imports without reading
@@ -26,7 +26,7 @@ class Deps:
 
 
 def register_all(mcp: FastMCP, deps: Deps) -> None:
-    """Register every §8 tool group on `mcp`."""
+    """Register every section 8 tool group on `mcp`."""
     from youtube_mcp.tools import data, transcripts
 
     transcripts.register(mcp, deps)

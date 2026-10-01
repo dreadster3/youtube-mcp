@@ -1,4 +1,4 @@
-"""Transcript fetching: taxonomy mapping, timeout, offload, caching, proxy wiring (§7, §11, §14).
+"""Transcript fetching: taxonomy mapping, timeout, offload, caching, proxy wiring (section 7, section 11, section 14).
 
 The library is faked at the module boundary (`youtube_mcp.transcript.fetch.YouTubeTranscriptApi`)
 and `get_settings` is replaced with a default-configured `Settings`, so nothing here touches
@@ -192,7 +192,7 @@ def _assert_short_message(exc: TranscriptError, video_id: str = VIDEO_ID) -> Non
     assert len(message) < 300
 
 
-# --- taxonomy mapping (§11) ----------------------------------------------------------------
+# --- taxonomy mapping (section 11) ----------------------------------------------------------------
 
 
 def _library_failures() -> list[tuple[str, BaseException, TranscriptErrorCode]]:
@@ -282,7 +282,7 @@ async def test_track_listing_maps_the_same_taxonomy(
 
 
 async def test_429_ip_block_is_the_retryable_branch(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`_raise_http_errors` turns HTTP 429 into `IpBlocked` (research §B4, gotcha 11)."""
+    """`_raise_http_errors` turns HTTP 429 into `IpBlocked` (research brief section B4, gotcha 11)."""
     assert issubclass(IpBlocked, RequestBlocked)  # the fold the taxonomy depends on
     patch_api(monkeypatch, FakeApi(error=IpBlocked(VIDEO_ID)))
 
@@ -352,7 +352,7 @@ async def test_cookie_error_is_upstream_not_invalid_request(
 
 
 async def test_request_exception_maps_to_upstream(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`requests` connection errors escape the library unwrapped (research §B9)."""
+    """`requests` connection errors escape the library unwrapped (research brief section B9)."""
     patch_api(monkeypatch, FakeApi(error=requests.ConnectionError("connection refused")))
 
     with pytest.raises(TranscriptError) as raised:
@@ -432,7 +432,7 @@ async def test_fetch_returns_the_full_transcript(monkeypatch: pytest.MonkeyPatch
     assert transcript.is_generated is False
     assert [(s.text, s.start, s.duration) for s in transcript.snippets] == [
         ("hello", 0.0, 1.5),
-        ("world", 1.5, 0.0),  # duration is 0.0 when YouTube omits `dur` (research §B2)
+        ("world", 1.5, 0.0),  # duration is 0.0 when YouTube omits `dur` (research brief section B2)
     ]
     assert api.fetch_calls == [(VIDEO_ID, ("pt", "en"), False)]
 
@@ -487,7 +487,7 @@ async def test_transcript_model_is_json_persistable(monkeypatch: pytest.MonkeyPa
     ).tracks == []
 
 
-# --- timeout + offload (§7.1) ---------------------------------------------------------------
+# --- timeout + offload (section 7.1) ---------------------------------------------------------------
 
 
 async def test_timeout_fires_and_no_long_sleep_is_needed(
@@ -549,7 +549,7 @@ async def test_fetch_is_offloaded_so_the_loop_ticks(monkeypatch: pytest.MonkeyPa
 
 
 async def test_fresh_api_instance_per_call(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Instances own a `requests.Session` and are not thread-safe — one per call (research §B1)."""
+    """Instances own a `requests.Session` and are not thread-safe — one per call (research brief section B1)."""
     factory = patch_api(monkeypatch, FakeApi(result=fetched()), FakeApi(result=fetched()))
 
     await fetch_transcript(VIDEO_ID)
@@ -608,7 +608,7 @@ async def test_external_cancellation_is_never_swallowed(
     assert isinstance(outcomes[0], anyio.get_cancelled_exc_class())
 
 
-# --- caching (§14) -------------------------------------------------------------------------
+# --- caching (section 14) -------------------------------------------------------------------------
 
 
 async def test_transcript_cached_and_second_call_skips_the_library(
@@ -707,7 +707,7 @@ async def test_cacheless_calls_work(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(second.list_calls) == 1
 
 
-# --- proxy wiring (§9, research §B6) --------------------------------------------------------
+# --- proxy wiring (section 9, research brief section B6) --------------------------------------------------------
 
 
 def test_build_proxy_config_is_none_by_default() -> None:

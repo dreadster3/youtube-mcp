@@ -1,4 +1,4 @@
-"""Tool-logic tests for the Data API group (§8), offline.
+"""Tool-logic tests for the Data API group (section 8), offline.
 
 The stub client from `conftest` records calls and replays scripted responses, so these tests
 assert what the *tool* adds on top of the Batch-2 client: argument validation, the
@@ -251,7 +251,7 @@ async def test_get_video_stats_surfaces_partial_failure_as_data() -> None:
 async def test_get_video_stats_second_call_is_served_from_cache(
     tmp_path,
 ) -> None:
-    """A repeated stats call must not spend quota again (§14)."""
+    """A repeated stats call must not spend quota again (section 14)."""
     payload = models.BatchStatsResponse.from_api(fixture("batch_get_stats.json"))
     mcp, stub = make_test_server(
         settings=Settings(_env_file=None), cache=make_cache(tmp_path), batch_get_stats=payload
@@ -287,7 +287,7 @@ async def test_get_video_stats_caches_only_the_misses(
 
 
 async def test_get_video_stats_ttl_comes_from_settings_cache_ttl(tmp_path) -> None:
-    """§12: `CACHE_TTL_SECONDS` must control the stats TTL, not a constant in this module."""
+    """section 12: `CACHE_TTL_SECONDS` must control the stats TTL, not a constant in this module."""
     payload = models.BatchStatsResponse.from_api(fixture("batch_get_stats.json"))
     mcp, _ = make_test_server(
         settings=Settings(_env_file=None, cache_ttl_seconds=7),
@@ -305,7 +305,7 @@ async def test_get_video_stats_ttl_comes_from_settings_cache_ttl(tmp_path) -> No
 
 
 async def test_get_video_stats_description_states_the_configured_ttl(tmp_path) -> None:
-    """The model reads the description, so it must name the TTL actually in force (§8)."""
+    """The model reads the description, so it must name the TTL actually in force (section 8)."""
     mcp, _ = make_test_server(
         settings=Settings(_env_file=None, cache_ttl_seconds=7), cache=make_cache(tmp_path)
     )
@@ -322,7 +322,7 @@ async def test_get_video_stats_description_states_the_configured_ttl(tmp_path) -
 
 
 async def test_uploads_playlist_still_cached_without_expiry(tmp_path) -> None:
-    """§14: the channel→uploads-playlist mapping never changes, so it stays `ttl=0`."""
+    """section 14: the channel→uploads-playlist mapping never changes, so it stays `ttl=0`."""
     mcp, _ = make_test_server(
         settings=Settings(_env_file=None, cache_ttl_seconds=7),
         cache=make_cache(tmp_path),
@@ -488,7 +488,7 @@ async def test_list_channel_videos_resolves_uploads_playlist_then_walks() -> Non
 async def test_uploads_playlist_is_cached_so_the_channel_lookup_happens_once(
     tmp_path,
 ) -> None:
-    """The channel→uploads mapping never changes, so it is fetched once (§14)."""
+    """The channel→uploads mapping never changes, so it is fetched once (section 14)."""
     mcp, stub = make_test_server(
         settings=Settings(_env_file=None),
         cache=make_cache(tmp_path),
@@ -679,7 +679,7 @@ async def test_rate_limit_error_says_retry_shortly() -> None:
 
 
 async def test_local_quota_exhaustion_names_our_own_budget() -> None:
-    """`quota.QuotaExceeded` is our accounting, not Google's — say so (§5.4)."""
+    """`quota.QuotaExceeded` is our accounting, not Google's — say so (section 5.4)."""
     mcp, _ = make_test_server(
         search_videos=QuotaExceeded(QuotaBucket.SEARCH, 100)
     )

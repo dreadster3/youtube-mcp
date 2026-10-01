@@ -1,13 +1,13 @@
-"""Thin async YouTube Data API v3 client (§6 of HANDOFF.md).
+"""Thin async YouTube Data API v3 client (section 6 of HANDOFF.md).
 
 One `httpx.AsyncClient` for the whole process, API-key auth as a `key=` query param,
-consistent error translation (§5.4) and a local per-bucket quota counter charged
+consistent error translation (section 5.4) and a local per-bucket quota counter charged
 *before* each request.
 
 Two deliberate settings:
 
 - `trust_env=False` on the owned client. `HTTP_PROXY`/`HTTPS_PROXY` are for the
-  transcript scraper (§9); letting them reroute Data API calls would send API-key traffic
+  transcript scraper (section 9); letting them reroute Data API calls would send API-key traffic
   through a residential proxy for no benefit.
 - `max_attempts=3` (default). Retries are only for `RateLimitedError` (403/429 rate-limit
   reasons) and 5xx, so a retry budget multiplied by an upstream retry loop cannot happen
@@ -95,7 +95,7 @@ class YouTubeApiError(Exception):
 
 
 class QuotaExceededError(YouTubeApiError):
-    """Daily quota gone (`quotaExceeded`, `dailyLimitExceeded`, …). Never retry (§5.4)."""
+    """Daily quota gone (`quotaExceeded`, `dailyLimitExceeded`, …). Never retry (section 5.4)."""
 
     code = "QUOTA_EXCEEDED"
 
@@ -134,7 +134,7 @@ class UpstreamError(YouTubeApiError):
         super().__init__(message, retryable=retryable, **kwargs)
 
 
-#: Reason → error class. Matched on `error.errors[].reason`, never on `domain` (§5.4).
+#: Reason → error class. Matched on `error.errors[].reason`, never on `domain` (section 5.4).
 #: `limitExceeded`/`servingLimitExceeded` classify as quota (non-retriable): treating a
 #: per-key daily ceiling as retriable only burns retries. `concurrentLimitExceeded` is the
 #: opposite — it clears on its own, so it stays in the retryable rate-limit set.
@@ -171,7 +171,7 @@ _INVALID_REQUEST_REASONS = frozenset(
 
 
 def _first_reason(payload: Any) -> tuple[str | None, str | None]:
-    """Pull `(reason, message)` out of an error envelope, defensively (§5.4)."""
+    """Pull `(reason, message)` out of an error envelope, defensively (section 5.4)."""
     if not isinstance(payload, Mapping):
         return None, None
     error = payload.get("error")
@@ -319,7 +319,7 @@ class YouTubeClient:
         self._sleep = sleep
         self._max_attempts = max(1, max_attempts)
         self._owns_client = http_client is None
-        # trust_env=False: HTTP_PROXY/HTTPS_PROXY belong to the transcript scraper (§9) and
+        # trust_env=False: HTTP_PROXY/HTTPS_PROXY belong to the transcript scraper (section 9) and
         # must not reroute Data API traffic (Batch 1 review landmine).
         self._http = http_client or httpx.AsyncClient(
             timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS),
@@ -434,7 +434,7 @@ class YouTubeClient:
         return models.SearchResults.from_api(await self._get("search", params))
 
     async def batch_get_stats(self, video_ids: Sequence[str]) -> models.BatchStatsResponse:
-        """`videos:batchGetStats` — its own bucket, and the cheap path for stats (§5.3).
+        """`videos:batchGetStats` — its own bucket, and the cheap path for stats (section 5.3).
 
         IDs are chunked into groups of 50, one unit each, charged up front so a quota
         failure aborts before the first request. Partial failures arrive in

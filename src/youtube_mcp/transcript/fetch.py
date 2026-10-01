@@ -1,4 +1,4 @@
-"""Transcript fetching: async wrapper over `youtube-transcript-api` 1.2.4 (§7, §11).
+"""Transcript fetching: async wrapper over `youtube-transcript-api` 1.2.4 (section 7, section 11).
 
 The library is synchronous, builds its own `requests.Session` per instance (so an instance is
 not thread-safe), passes no HTTP timeout, and reports failures through a deep exception
@@ -47,17 +47,17 @@ from youtube_mcp.transcript.errors import TranscriptError, TranscriptErrorCode
 logger = logging.getLogger(__name__)
 
 #: Deadline for one offloaded library call. The library has no timeout of its own, so without
-#: this an unresponsive YouTube hangs the tool call forever (§7.1).
+#: this an unresponsive YouTube hangs the tool call forever (section 7.1).
 TRANSCRIPT_TIMEOUT_SECONDS = 30.0
 
-#: Bias the Webshare rotation towards the operator's region to limit added latency (§9).
+#: Bias the Webshare rotation towards the operator's region to limit added latency (section 9).
 WEBSHARE_FILTER_IP_LOCATIONS = ["pt", "es"]
 
 #: YouTube video IDs are 11 characters of [A-Za-z0-9_-].
 _VIDEO_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{11}")
 
 #: Cap on the rejected input echoed back in an error message, so a 10 kB paste cannot break
-#: the one-line message discipline (§11).
+#: the one-line message discipline (section 11).
 _REJECTED_ID_MAX_CHARS = 15
 
 T = TypeVar("T")
@@ -99,7 +99,7 @@ class TranscriptTrackList(BaseModel):
 
 
 def build_proxy_config(settings: Settings) -> ProxyConfig | None:
-    """Map proxy settings onto a library proxy config, or `None` for a direct connection (§9).
+    """Map proxy settings onto a library proxy config, or `None` for a direct connection (section 9).
 
     Webshare wins when both its credentials are set; otherwise a generic proxy is used if either
     proxy URL is set.
@@ -123,7 +123,7 @@ def _error(code: TranscriptErrorCode, video_id: str, cause: str) -> TranscriptEr
     """Build a short, model-facing error: one line, video ID, cause.
 
     `str(error)` prefixes the taxonomy code. The library's own messages are multi-line blobs
-    ending in a GitHub-issue referral, so they are never surfaced (§11, research §B4). The
+    ending in a GitHub-issue referral, so they are never surfaced (section 11, research brief section B4). The
     echoed input is truncated: rejected input can be arbitrarily long (a pasted URL, a blob).
     """
     return TranscriptError(code, f"video {_display_id(video_id)}: {cause}")
@@ -138,7 +138,7 @@ def _display_id(video_id: str) -> str:
 
 #: Library exception -> taxonomy. First match wins; anything absent falls through to
 #: TRANSCRIPT_UPSTREAM_ERROR. `IpBlocked` also covers HTTP 429, which `_raise_http_errors`
-#: folds into it directly (research §B4) — that is the one genuinely retryable block.
+#: folds into it directly (research brief section B4) — that is the one genuinely retryable block.
 _ERROR_TABLE: tuple[tuple[type[Exception], TranscriptErrorCode, str], ...] = (
     (TranscriptsDisabled, TranscriptErrorCode.DISABLED, "captions are disabled for this video"),
     (
@@ -205,7 +205,7 @@ _ERROR_TABLE: tuple[tuple[type[Exception], TranscriptErrorCode, str], ...] = (
 
 
 def _error_for(video_id: str, exc: Exception) -> TranscriptError | None:
-    """Map a library exception onto the §11 taxonomy, or `None` if it is not one we know."""
+    """Map a library exception onto the section 11 taxonomy, or `None` if it is not one we know."""
     for exc_type, code, cause in _ERROR_TABLE:
         if isinstance(exc, exc_type):
             return _error(code, video_id, cause)
@@ -252,7 +252,7 @@ async def _offloaded(worker: Callable[[], T], *, video_id: str, what: str) -> T:
     except TimeoutError:
         raise _error(TranscriptErrorCode.UPSTREAM_ERROR, video_id, f"{what} timed out") from None
     except requests.RequestException as exc:
-        # Connection errors escape the library unwrapped (research §B9).
+        # Connection errors escape the library unwrapped (research brief section B9).
         raise _error(
             TranscriptErrorCode.UPSTREAM_ERROR, video_id, f"{what} failed: cannot reach YouTube"
         ) from exc
@@ -319,7 +319,7 @@ async def fetch_transcript(
     """Fetch a video's transcript, preferring `languages` in order.
 
     `languages` defaults to the configured transcript language. A cached transcript never
-    expires (a published transcript does not change, §14) and is keyed by the language that was
+    expires (a published transcript does not change, section 14) and is keyed by the language that was
     actually returned plus a `styled` marker when `preserve_formatting` is set, so a caller can
     never be served the other style variant. Raises `TranscriptError` for every failure mode —
     never the library's own.
@@ -355,7 +355,7 @@ async def list_transcript_tracks(
 ) -> TranscriptTrackList:
     """List every caption track available for a video, including translation targets.
 
-    Cached forever under `transcript_tracks:<video_id>` (§14). Raises `TranscriptError`.
+    Cached forever under `transcript_tracks:<video_id>` (section 14). Raises `TranscriptError`.
     """
     _validate_video_id(video_id)
 
