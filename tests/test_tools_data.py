@@ -9,9 +9,11 @@ envelopes from `tests/fixtures/`.
 
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 from typing import Any
 
+import aiosqlite
 import pytest
 from fastmcp import Client
 
@@ -50,6 +52,16 @@ def make_cache(tmp_path) -> Cache:
     cache = Cache(str(tmp_path / "cache.db"))
     _OPEN_CACHES.append(cache)
     return cache
+
+
+async def _expiry_of(tmp_path, key: str) -> float | None:
+    """Read an entry's raw `expires_at` — the value under test, so no `Cache` round-trip."""
+    async with (
+        aiosqlite.connect(str(tmp_path / "cache.db")) as db,
+        db.execute("SELECT expires_at FROM cache WHERE key = ?", (key,)) as cursor,
+    ):
+        row = await cursor.fetchone()
+    return None if row is None else float(row[0])
 
 
 async def call_tool(mcp, name: str, arguments: dict) -> Any:
@@ -272,6 +284,55 @@ async def test_get_video_stats_caches_only_the_misses(
     assert result["failed_video_ids"] == ["brand-new"]
     assert [item["video_id"] for item in result["items"]] == [known]
     assert result["cached"] is False
+
+
+async def test_get_video_stats_ttl_comes_from_settings_cache_ttl(tmp_path) -> None:
+    """§12: `CACHE_TTL_SECONDS` must control the stats TTL, not a constant in this module."""
+    payload = models.BatchStatsResponse.from_api(fixture("batch_get_stats.json"))
+    mcp, _ = make_test_server(
+        settings=Settings(_env_file=None, cache_ttl_seconds=7),
+        cache=make_cache(tmp_path),
+        batch_get_stats=payload,
+    )
+    video_id = payload.items[0].video_id
+
+    before = time.time()
+    await call_tool(mcp, "youtube_get_video_stats", {"video_ids": [video_id]})
+
+    expiry = await _expiry_of(tmp_path, f"video_stats:{video_id}")
+    # A weird TTL is the point: a hardcoded 300 would land ~293s past `before`.
+    assert before + 7 <= expiry <= before + 8
+
+
+async def test_get_video_stats_description_states_the_configured_ttl(tmp_path) -> None:
+    """The model reads the description, so it must name the TTL actually in force (§8)."""
+    mcp, _ = make_test_server(
+        settings=Settings(_env_file=None, cache_ttl_seconds=7), cache=make_cache(tmp_path)
+    )
+
+    async with Client(mcp) as client:
+        tools = {tool.name: tool for tool in await client.list_tools()}
+
+    # Collapse the hard wrap: the sentence is split across lines in the docstring.
+    description = " ".join(tools["youtube_get_video_stats"].description.split())
+    assert "~7 seconds (the server's `CACHE_TTL_SECONDS`; default 3600)" in description
+    assert "five minutes" not in description
+
+
+async def test_uploads_playlist_still_cached_without_expiry(tmp_path) -> None:
+    """§14: the channel→uploads-playlist mapping never changes, so it stays `ttl=0`."""
+    mcp, _ = make_test_server(
+        settings=Settings(_env_file=None, cache_ttl_seconds=7),
+        cache=make_cache(tmp_path),
+        list_channel=models.Channel(
+            channel_id=CHANNEL_ID, title="T", uploads_playlist_id=UPLOADS_ID
+        ),
+        list_playlist_items=models.PlaylistItemPage(),
+    )
+
+    await call_tool(mcp, "youtube_list_channel_videos", {"channel_id": CHANNEL_ID})
+
+    assert await _expiry_of(tmp_path, f"uploads_playlist:{CHANNEL_ID}") == float("inf")
 
 
 async def test_get_video_stats_works_without_a_cache() -> None:
@@ -668,10 +729,6 @@ async def test_batch_get_stats_partial_failure_is_logged(
 
 
 # --------------------------------------------------------------- stats cache internals
-
-
-def test_stats_ttl_is_short_enough_to_not_report_stale_counts() -> None:
-    assert 0 < tools_data.STATS_TTL_SECONDS <= 600
 
 
 def test_uploads_playlist_ttl_means_no_expiry() -> None:

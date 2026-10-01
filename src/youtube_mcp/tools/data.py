@@ -1,8 +1,9 @@
 """Data API tools (§8): search, videos, stats, comments, channel, channel videos, categories.
 
 Seven tools over the Batch-2 client. This module owns the things the client deliberately does
-not: the uploads-playlist walk, the short stats cache, and the model-facing wording of quota
-cost. Descriptions are load-bearing — they are the LLM's only documentation (§8), so each one
+not: the uploads-playlist walk, the stats cache (TTL from `CACHE_TTL_SECONDS`, §12), and the
+model-facing wording of quota cost. Descriptions are load-bearing — they are the LLM's only
+documentation (§8), so each one
 states its bucket where a bucket applies (§5.3), and the scarce `search.list` bucket is called
 out as scarce.
 
@@ -38,10 +39,9 @@ from youtube_mcp.youtube.client import (
 
 logger = logging.getLogger(__name__)
 
-#: View counts move, so stats are cached briefly: long enough to make a burst of repeat calls
-#: free, short enough that a "current" count is never badly stale (§14).
-STATS_TTL_SECONDS = 300
 #: The channel→uploads-playlist mapping never changes, so it is cached without expiry (§14).
+#: Stats are the one mutable cache: their TTL is `settings.cache_ttl_seconds` (§12), applied
+#: at each write in `_stats_for`.
 UPLOADS_PLAYLIST_TTL_SECONDS = 0
 #: `playlistItems` accepts at most 50 per page; also the walk's page size.
 PLAYLIST_PAGE_SIZE = 50
@@ -164,7 +164,9 @@ async def _stats_for(deps: Deps, video_ids: list[str]) -> BatchStatsResult:
                     _stats_key(item.video_id),
                     # mode="json": the cache is JSON-backed and `published_at` is a datetime.
                     item.model_dump(mode="json"),
-                    ttl=STATS_TTL_SECONDS,
+                    # View counts move, so stats are the only cache with a real TTL — and it is
+                    # the operator's `CACHE_TTL_SECONDS`, not a constant here (§12).
+                    ttl=deps.settings.cache_ttl_seconds,
                 )
 
     found = {**cached, **{item.video_id: item for item in fresh}}
@@ -324,16 +326,15 @@ def register(mcp: FastMCP, deps: Deps) -> None:
             missing_video_ids=[video_id for video_id in ids if video_id not in found],
         )
 
-    @mcp.tool
-    @as_tool_error
     async def youtube_get_video_stats(video_ids: list[str] | str) -> BatchStatsResult:
         """Get view, like and comment counts for up to 50 videos in one call.
 
         Accepts one ID or a list. Uses `videos:batchGetStats`, which has **its own
         10,000-call/day bucket** — this does not consume the shared pool that `youtube_get_video`
-        draws on, so it is the cheap way to get numbers. Results are cached for five minutes, so
-        re-reading the same videos costs no quota at all (`cached: true` only when every
-        requested video's value came from the cache; false otherwise).
+        draws on, so it is the cheap way to get numbers. Results are cached for ~{stats_ttl}
+        seconds (the server's `CACHE_TTL_SECONDS`; default 3600), so re-reading the same videos
+        costs no quota at all (`cached: true` only when every requested video's value came from
+        the cache; false otherwise).
 
         A batch is not atomic: IDs that do not exist or are not publicly visible come back as
         `failed_video_ids`, with the successful ones still returned. Surface both — this is
@@ -344,6 +345,14 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         """
         ids = _ids_of(video_ids, tool="youtube_get_video_stats")
         return await _stats_for(deps, ids)
+
+    # Registered by hand, not with `@mcp.tool`: the description has to carry the *configured*
+    # stats TTL, and an f-string is not a docstring (PEP 257 wants a plain literal), so the
+    # placeholder is filled in here. Every other tool keeps the decorator.
+    youtube_get_video_stats.__doc__ = youtube_get_video_stats.__doc__.format(
+        stats_ttl=deps.settings.cache_ttl_seconds
+    )
+    mcp.tool(as_tool_error(youtube_get_video_stats))
 
     @mcp.tool
     @as_tool_error

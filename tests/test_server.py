@@ -7,6 +7,7 @@ covers the tools and their structured output) and through `create_app` with an A
 
 from __future__ import annotations
 
+import signal
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -509,10 +510,63 @@ def test_main_stdio_dispatches_to_mcp_run(monkeypatch, tmp_path: Path) -> None:
     )
     monkeypatch.setattr(server_module, "get_settings", lambda: stdio_settings)
     monkeypatch.setattr(server_module.FastMCP, "run", lambda self, **kwargs: calls.append(kwargs))
+    # Keep the process's real SIGTERM disposition out of the test run.
+    monkeypatch.setattr(server_module.signal, "signal", lambda *_: None)
 
     main()
 
     assert calls == [{"transport": "stdio"}]
+
+
+def test_main_defaults_to_stdio(monkeypatch, tmp_path: Path) -> None:
+    """With no `MCP_TRANSPORT` set, `main()` runs the stdio transport (config.py default)."""
+    calls: list[dict] = []
+    default_settings = Settings(
+        _env_file=None, youtube_api_key="k", database_path=tmp_path / "cache.db"
+    )
+    monkeypatch.setattr(server_module, "get_settings", lambda: default_settings)
+    monkeypatch.setattr(server_module.FastMCP, "run", lambda self, **kwargs: calls.append(kwargs))
+    monkeypatch.setattr(server_module.signal, "signal", lambda *_: None)
+
+    main()
+
+    assert default_settings.mcp_transport == "stdio"
+    assert calls == [{"transport": "stdio"}]
+
+
+def test_main_stdio_installs_a_sigterm_handler(monkeypatch, tmp_path: Path) -> None:
+    """PID 1 in a container namespace drops SIGTERM unless a handler exists (§15).
+
+    Without it, `docker stop` on a stdio container waits out the grace period and SIGKILLs
+    (measured: 10.2s) — the http path gets uvicorn's handler for free. The handler must be
+    `os._exit`, not `sys.exit`: anyio's non-daemon stdin-reader thread never joins, so a
+    graceful exit deadlocks in interpreter shutdown (also measured).
+    """
+    stdio_settings = Settings(
+        _env_file=None,
+        youtube_api_key="k",
+        mcp_transport="stdio",
+        database_path=tmp_path / "cache.db",
+    )
+    registered: list[tuple[Any, Any]] = []
+    exited: list[int] = []
+    monkeypatch.setattr(server_module, "get_settings", lambda: stdio_settings)
+    monkeypatch.setattr(server_module.FastMCP, "run", lambda self, **kwargs: None)
+    # A list, not a dict keyed by signal: the stdio path may register more than one handler,
+    # and the test asserts on the SIGTERM one specifically.
+    monkeypatch.setattr(
+        server_module.signal,
+        "signal",
+        lambda sig, handler: registered.append((sig, handler)),
+    )
+    monkeypatch.setattr(server_module.os, "_exit", lambda code: exited.append(code))
+
+    main()
+
+    handlers = [handler for sig, handler in registered if sig == signal.SIGTERM]
+    assert handlers, f"no SIGTERM handler registered: {registered}"
+    handlers[0](signal.SIGTERM, None)
+    assert exited == [0]
 
 
 def test_main_http_uses_uvicorn_with_the_factory(monkeypatch, tmp_path: Path) -> None:

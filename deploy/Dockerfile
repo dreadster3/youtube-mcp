@@ -41,10 +41,13 @@ RUN groupadd --gid "${APP_GID}" app \
 # Image-level defaults only; everything here is overridable per deployment (§12).
 # DATABASE_PATH is absolute because the CWD-relative default (`cache.db`) would land in
 # /app and vanish on restart.
+# MCP_TRANSPORT=http: the config default is stdio (local agents), but a container is
+# long-running and wants the HTTP surface — without this the image would exit on stdin EOF.
 ENV VIRTUAL_ENV=/app/.venv \
     PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    DATABASE_PATH=/data/cache.db
+    DATABASE_PATH=/data/cache.db \
+    MCP_TRANSPORT=http
 
 WORKDIR /app
 
@@ -63,7 +66,7 @@ USER app
 
 EXPOSE 8088
 
-# `--factory` because `create_app()` returns the app (§13). `sh -c` + `exec` so MCP_HOST /
-# MCP_PORT actually take effect and signals still reach uvicorn; the console script
-# (`youtube-mcp`) is the equivalent path for stdio and local use.
-ENTRYPOINT ["/bin/sh", "-c", "exec uvicorn youtube_mcp.server:create_app --factory --host \"${MCP_HOST:-0.0.0.0}\" --port \"${MCP_PORT:-8088}\""]
+# The console script, not uvicorn directly: `main()` dispatches on MCP_TRANSPORT (stdio ->
+# `mcp.run()`, http -> uvicorn with the `create_app` factory). `sh -c` + `exec` keeps the
+# server as PID 1, so MCP_HOST / MCP_PORT and `docker stop` both reach it.
+ENTRYPOINT ["/bin/sh", "-c", "exec youtube-mcp"]

@@ -3,16 +3,18 @@
 The wiring lives in `create_app`, a factory: it reads configuration, builds the client and
 the cache, registers the tools and returns the ASGI app. Nothing at module level reads
 settings, so importing this module never requires an API key — the fail-fast gate
-(`Settings.require_api_key`) runs inside `create_app`, which is exactly when the operator
-starts the server.
+(`Settings.require_api_key`) runs inside `create_app`/`main`, which is exactly when the
+operator starts the server.
 
-Two transports (§12, §13):
+Two transports (§12), both entered through the `youtube-mcp` console script:
 
-- **http** (default) — `uvicorn youtube_mcp.server:create_app --factory --host 0.0.0.0
-  --port 8088`, or the `youtube-mcp` console script. Built with `stateless_http=True` so any
-  replica can serve any request (sticky sessions do not work: most MCP clients do not
-  forward cookies).
-- **stdio** — `youtube-mcp` with `MCP_TRANSPORT=stdio` (`mcp.run()`), for local/desktop use.
+- **stdio** (the default) — `uv run youtube-mcp` (`mcp.run(transport="stdio")`). This is how
+  a local agent launches the server: it speaks MCP on the process's stdin/stdout, no port, no
+  auth. Every tool works identically here — nothing in the tool surface is HTTP-only.
+- **http** — `MCP_TRANSPORT=http youtube-mcp`, or `uvicorn youtube_mcp.server:create_app
+  --factory`. Built with `stateless_http=True` so any replica can serve any request (sticky
+  sessions do not work: most MCP clients do not forward cookies). The container image pins
+  this transport so `/health` stays probeable.
 
 There is deliberately no module-level `app`: a factory is what allows `--factory`, injecting
 test doubles, and importing the module for introspection without a key.
@@ -21,6 +23,8 @@ test doubles, and importing the module for introspection without a key.
 from __future__ import annotations
 
 import logging
+import os
+import signal
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -158,12 +162,20 @@ def create_app(
 
 
 def main() -> None:
-    """Console entrypoint: dispatch on `MCP_TRANSPORT` (§12)."""
+    """Console entrypoint: dispatch on `MCP_TRANSPORT` (§12). Default is stdio."""
     settings = get_settings()
     settings.require_api_key()
     logging.basicConfig(level=settings.log_level.upper())
 
     if settings.mcp_transport == "stdio":
+        # A PID-1 process in a namespace has no default SIGTERM disposition, so without a handler
+        # a `docker stop` waits out the grace period and SIGKILLs (measured: 10.2s). stdio itself
+        # installs none — uvicorn supplies one on the http path. `os._exit` rather than
+        # `sys.exit`: anyio's non-daemon stdin-reader thread never joins, so a graceful exit
+        # deadlocks in interpreter shutdown. The cache is SQLite (crash-safe journal, §14) and
+        # ephemeral anyway, so skipping its close loses nothing. SIGINT needs nothing: the local
+        # Ctrl-C path is the default KeyboardInterrupt.
+        signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
         # stdio cannot use the ASGI app; the factory's server object is the right unit here.
         # `transport` is explicit so an ambient FASTMCP_TRANSPORT can never redirect it.
         resources = ServerResources(

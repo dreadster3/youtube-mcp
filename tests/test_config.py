@@ -9,7 +9,9 @@ from youtube_mcp.config import MissingApiKeyError, Settings, get_settings
 def test_defaults(clean_env: None) -> None:
     settings = Settings()
     assert settings.youtube_transcript_lang == "en"
-    assert settings.mcp_transport == "http"
+    # stdio is the default: the primary deployment is a local agent launching a subprocess.
+    # The container image overrides it to http (deploy/Dockerfile).
+    assert settings.mcp_transport == "stdio"
     assert (settings.mcp_host, settings.mcp_port) == ("0.0.0.0", 8088)
     assert settings.fastmcp_stateless_http is True
     assert settings.response_limit == 50_000
@@ -24,14 +26,14 @@ def test_defaults(clean_env: None) -> None:
 
 def test_env_overrides(clean_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("YOUTUBE_API_KEY", "test-key")
-    monkeypatch.setenv("MCP_TRANSPORT", "stdio")
+    monkeypatch.setenv("MCP_TRANSPORT", "http")
     monkeypatch.setenv("MCP_PORT", "9000")
     monkeypatch.setenv("RESPONSE_LIMIT", "1000")
     monkeypatch.setenv("CACHE_TTL_SECONDS", "10")
     monkeypatch.setenv("DATABASE_PATH", "/tmp/other.db")
     monkeypatch.setenv("FASTMCP_STATELESS_HTTP", "false")
     settings = Settings()
-    assert settings.mcp_transport == "stdio"
+    assert settings.mcp_transport == "http"
     assert settings.mcp_port == 9000
     assert settings.response_limit == 1000
     assert settings.cache_ttl_seconds == 10
