@@ -9,7 +9,7 @@ DISTRIBUTION_NAME = "dreadster3-youtube-mcp"
 
 # Read from the installed distribution metadata, never hardcode: release-please bumps
 # `project.version` in pyproject.toml on every release PR, and a hardcoded copy here would
-# ship the wrong version in `serverInfo` and /health.
+# would ship the wrong version in /health.
 try:
     __version__ = version(DISTRIBUTION_NAME)
 except PackageNotFoundError:  # imported from a source tree that was never installed

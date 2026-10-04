@@ -24,8 +24,9 @@
 #     (a) Create a fine-grained PAT (contents: write, pull-requests: write on this repo) as
 #         secret `RELEASE_PLEASE_TOKEN` and pass `token: ${{ secrets.RELEASE_PLEASE_TOKEN }}`
 #         below. Then merging the release PR runs `release.yml` automatically. <- preferred
-#     (b) Keep the default token and re-run `release.yml` manually (workflow_dispatch) after
-#         each release-please release.
+#     (b) Keep the default token and handle each release manually: run the publish steps
+#         (uv build + upload, docker build + push) yourself, or make release.yml
+#         manually-dispatchable with an explicit tag input before this matters.
 #   Without one of these the release is tagged but no wheel reaches PyPI and no image is built.
 
 name: release-please
