@@ -45,7 +45,7 @@ Format: `type(scope): summary`, or `type(scope)!: summary` for a breaking change
 - **A scope is preferred on every commit**, even where the type allows omitting it:
   `feat(tools):`, `fix(cache):`, `docs(readme):`, `ci(workflows):`, `test(client):`,
   `refactor(client):`, `chore(release):`.
-- Subject: imperative mood, 50 characters or fewer, no trailing period, lowercase after the colon.
+- Subject: imperative mood, no trailing period, lowercase after the colon.
 - Body only when the why is not obvious from the subject. Bullet points over prose.
 
 Good:
