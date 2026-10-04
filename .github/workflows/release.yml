@@ -1,64 +1,153 @@
-# Publishes the two release artifacts when a GitHub Release is published:
-#   job `pypi`   — sdist + wheel to PyPI, via OIDC Trusted Publishing (no API token stored).
-#   job `docker` — the container image to GHCR (build context is the repo root; see below).
+# Release automation, end to end, in ONE workflow.
 #
-# Trigger is `released`, not `created`: `created` also fires for drafts, which would publish a
-# draft release's artifacts. `released` fires when a release (or draft) is published.
+# This file replaces the former pair `.github/workflows/release-please.yml` (open the release PR)
+# plus `.github/workflows/release.yml` (publish once the Release existed). The two halves are now
+# `needs:`-chained inside a single run, which is what lets the default `GITHUB_TOKEN` do the whole
+# job — see TOKEN below. The filename stays `release.yml` on purpose: the PyPI pending-publisher
+# registration matches on the workflow FILENAME (see OPERATOR SETUP).
+#
+# WHAT RUNS WHEN
+#   push to main, alone:
+#     job `release-please` opens or refreshes a PR titled "chore(main): release X.Y.Z". Nothing is
+#     published and no tag exists yet. Merging ordinary work is unaffected; the PR just sits there.
+#   the OWNER merges that release PR:
+#     the same run's `release-please` job tags `vX.Y.Z` and creates the GitHub Release, then
+#     reports `release_created=true`, so both publish jobs run in that same run:
+#       `pypi`   — sdist + wheel to PyPI, via OIDC trusted publishing (no API token stored).
+#       `docker` — the container image to GHCR.
+#   workflow_dispatch:
+#     a manual run. release-please no-ops when nothing is pending, so both publish jobs are skipped
+#     by their `if:`. That makes this a manual re-check, NOT a re-publish path: on a fresh dispatch
+#     there is nothing pending, hence no new tag for the publish jobs to check out. To retry a
+#     FAILED publish, use "Re-run failed jobs" on the run that created the release (Actions -> that
+#     run); re-runs reuse the original commit and ref.
+#
+# CONVENTIONAL COMMITS — and because this repo squash-merges, the PR TITLE is the commit subject.
+# release-please builds the changelog and the version bump from CONVENTIONAL COMMITS ONLY
+# (`feat:`, `fix:`, `perf:`, ...). A PR titled "add quota counter" therefore produces no changelog
+# entry and no bump; "feat: add quota counter" does. Get the PR titles right, not the commits
+# inside them.
+#
+# WHAT THE OWNER CONTROLS
+#   (a) WHEN a release happens. Nothing is published until the release PR is merged — that merge is
+#       the release decision, and it is the only gate on both the container image and the upload.
+#   (b) RECOMMENDED second gate, for the PyPI upload: give the `pypi` environment required
+#       reviewers (Settings -> Environments -> `pypi` -> Required reviewers). The `pypi` job then
+#       pauses before any of its steps run and waits for an approval click, so a release becomes
+#       "release PR merged" AND "owner clicked approve". Set it up once; it needs no workflow
+#       change because `environment: pypi` below is already the hook.
+#
+# HONEST NOTE — PyPI has NO staged publishing, so the upload is live the moment it succeeds.
+#   npm's staging area lets you inspect a tarball and then promote or drop it. PyPI has no such
+#   area: `gh-action-pypi-publish` exchanges the job's OIDC identity for a short-lived token and
+#   uploads, and that upload is FINAL and public. It cannot be un-staged, and a version number can
+#   never be reused — a bad upload must be yanked (still downloadable, still installable by exact
+#   version) and superseded by a new release, never replaced. The GHCR push is equally final.
+#   So the owner's control points really are just the two above: the merge, and the optional
+#   `pypi` environment approval. There is no post-upload review step to design, and step (b) is
+#   what buys back most of what npm staging gave you. It is recommended, not mandatory: without it
+#   the merge publishes by itself.
+#
+# TOKEN — default `GITHUB_TOKEN`, no PAT (the old `RELEASE_PLEASE_TOKEN` fallback is gone).
+#   The old `release.yml` fired on the `release: released` event, and GitHub suppresses workflow
+#   runs caused by events that `GITHUB_TOKEN` itself created — which is exactly why the old file
+#   had to document a fine-grained PAT as the fix for "the release is tagged but nothing gets
+#   published". That gap does not exist here: the publish jobs are `needs:`-chained within the run
+#   that release-please creates the tag in, and `needs:` chaining is not event-based, so nothing
+#   has to be triggered and no long-lived token exists to leak or rotate. The default token is
+#   still scoped per job by the `permissions:` blocks below.
 #
 # ---------------------------------------------------------------------------------------
-# OPERATOR SETUP — REQUIRED, one time. Nothing here can do it for you, and until it is done
-# the `pypi` job fails at upload with a 403 / "trusted publishing" error.
+# OPERATOR SETUP — two one-time steps, external to this repo. Check them with the first real
+# release; without the first, `pypi` fails at upload with a 403 / trusted-publishing error.
 #
-#   PyPI has no way to pre-create a project from a workflow. Register a *pending publisher*
-#   instead, which authorises this exact workflow to create the `dreadster3-youtube-mcp`
-#   project on its first successful upload:
+#   1. PyPI pending publisher (required). PyPI cannot pre-create a project from a workflow, so
+#      register a *pending publisher*, which authorises this exact workflow to create the project
+#      on its first successful upload:
+#       - Sign in at https://pypi.org as the account that will own the project.
+#       - Go to https://pypi.org/manage/account/publishing/ (Account -> Publishing).
+#       - "Add a new pending publisher", choose GitHub, and fill in EXACTLY:
+#           PyPI Project Name : dreadster3-youtube-mcp
+#           Owner             : dreadster3
+#           Repository name   : youtube-mcp
+#           Workflow name     : release.yml        <- the FILENAME only, not the full path
+#           Environment name  : pypi
+#      Every field is matched literally (case-sensitive). `youtube-mcp` alone is a different
+#      project owned by someone else, which is why the distribution is namespaced by owner.
+#      Save; the first publish converts the pending publisher into a normal one.
+#      These three names are coupled to this file and must stay in sync:
+#        environment name `pypi` == `environment: pypi` on the `pypi` job
+#        workflow filename       == this file's name, `.github/workflows/release.yml`
+#        dist name               == `[project] name` in pyproject.toml
 #
-#     1. Sign in at https://pypi.org as the account that will own the project.
-#     2. Go to https://pypi.org/manage/account/publishing/ (Account -> Publishing).
-#     3. Under "Add a new pending publisher", choose GitHub and fill in EXACTLY:
-#          PyPI Project Name : dreadster3-youtube-mcp
-#          Owner             : dreadster3
-#          Repository name   : youtube-mcp
-#          Workflow name     : release.yml         <- the FILENAME only, not the full path
-#          Environment name  : pypi
-#        Every field is matched literally (case-sensitive). `youtube-mcp` alone is a
-#        different project owned by someone else, which is why the distribution is
-#        namespaced by owner.
-#     4. Save. The first publish converts the pending publisher into a normal one.
-#
-#   The three names above are coupled to this file and must stay in sync:
-#       environment name `pypi`  == `environment: pypi` on the `pypi` job
-#       workflow filename        == this file's name, `.github/workflows/release.yml`
-#       dist name                == `[project] name` in pyproject.toml
-#
-#   For container pulls: the GHCR package is private on first push. Make it public under
-#   https://github.com/users/dreadster3/packages/container/youtube-mcp/settings if it should
-#   be pullable without auth.
+#   2. GHCR visibility (optional). The package is private on first push. Make it public under
+#      https://github.com/users/dreadster3/packages/container/youtube-mcp/settings if the image
+#      should be pullable without auth.
 # ---------------------------------------------------------------------------------------
 
-name: release
+name: Release
 
 "on":
-  release:
-    types: [released]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
-# Workflow-level default is the narrowest that works; each job re-declares what it needs so a
-# `write` permission added to one job can never leak into the other (notably no `id-token` on
-# the docker job).
+# Workflow-level default is the narrowest that works; every job re-declares what it needs, so a
+# `write` granted to one job can never leak into another (notably no `id-token` on `docker`).
 permissions:
   contents: read
 
-concurrency:
-  # Keyed by the tag: a re-published release re-runs cleanly, and two releases never interleave.
-  # Not cancelled — a half-finished PyPI upload cannot be safely retried, and PyPI rejects a
-  # duplicate version anyway. `skip-existing: false` below makes that failure loud, not silent.
-  group: release-${{ github.event.release.tag_name }}
-  cancel-in-progress: false
-
 jobs:
+  release-please:
+    name: Tag and release
+    runs-on: ubuntu-latest
+
+    # Only what release-please writes: the release PR, the tag and the Release.
+    permissions:
+      contents: write
+      pull-requests: write
+
+    # Never cancels: two overlapping runs could both try to open a release PR, and serialising is
+    # what makes the release PR deterministic. Job-scoped rather than workflow-scoped so a run that
+    # is publishing cannot be delayed by the next push to main. The publish jobs need no group of
+    # their own — release-please is serialised, so at most one run at a time reports
+    # `release_created=true`, and PyPI's "version already exists" rejection is the backstop.
+    concurrency:
+      group: release-please
+      cancel-in-progress: false
+
+    outputs:
+      # `release_created` is the gate for both publish jobs; `tag_name` (`vX.Y.Z`) is what they
+      # check out and what the image is tagged from. Both are strings, so `if:` compares to 'true'.
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+
+    steps:
+      # v5, not v4: v4 is `runs.using: node20` and Node 20 was removed from the hosted runners, so
+      # v4 no longer starts. Every pin in this file is a node24 build for the same reason
+      # (checkout@v7, metadata-action@v6 rather than v5).
+      - id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          # `python` reads the root `pyproject.toml`'s `[project] version` — static here, so it is
+          # bumped in place and no release-please manifest file is needed. Two notes on how this
+          # strategy behaves with our layout, recorded so nobody re-investigates them:
+          #   - It also *tries* to rewrite `__version__ = "..."` in `<name>/__init__.py` and
+          #     `src/<name>/__init__.py`. Our package lives at `src/youtube_mcp/__init__.py` and
+          #     the distribution name is `dreadster3-youtube-mcp`, so none of the derived paths
+          #     match: it logs a "file did not exist" warning and moves on. Harmless, nothing to fix.
+          #   - `src/youtube_mcp/__init__.py` deliberately has no version literal (it reads
+          #     `importlib.metadata.version()`), so even a matching path would be a no-op.
+          release-type: python
+
   pypi:
     name: Build and publish to PyPI
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
+
+    # The environment is the owner-approval hook described in the header; with required reviewers
+    # configured it also gates every step below, not just the upload.
     environment: pypi
 
     # `id-token: write` is the whole mechanism: the job exchanges its OIDC identity for a
@@ -68,17 +157,29 @@ jobs:
       contents: read
 
     steps:
-      # v4 is `node20` and no longer runs (Node 20 removed from the hosted images); v7 is node24.
+      # The tag release-please just created, so the artifacts come from the released commit and not
+      # from whatever main has moved on to. Needs no `fetch-depth`: `uv build` reads the tree.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
       # Exact pin, not @v10: no floating major ref exists past v7 upstream, so `@v10` would not
       # resolve. Needs no `python-version` — `uv build` uses the interpreter uv manages, and the
       # build itself is isolated from the runner's Python.
+      #
+      # enable-cache: false is deliberate, and it is not setup-uv's default. The default `auto`
+      # enables caching on GitHub-hosted runners for everything EXCEPT release/tag pushes — and
+      # this workflow is triggered by a plain branch push, so `auto` would quietly turn caching ON
+      # here. This is the one job that holds an OIDC write identity, so it must not restore build
+      # inputs from a shared cache namespace that any other run can write to. The cost is one cold
+      # `uv build` per release.
       - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: false
 
       # Produces `dist/dreadster3_youtube_mcp-<version>.tar.gz` and `...-py3-none-any.whl`. The
-      # filenames are derived from the normalized distribution name, so they are the fastest
-      # check that the rename to `dreadster3-youtube-mcp` took effect.
+      # filenames derive from the normalized distribution name, so they are the fastest check that
+      # the rename to `dreadster3-youtube-mcp` took effect.
       - name: Build sdist and wheel
         run: uv build
 
@@ -86,18 +187,20 @@ jobs:
         run: ls -l dist/
 
       # `release/v1` is a maintained branch, not a tag — the only ref pypa documents for this
-      # action. No `password:` on purpose: with `id-token: write` present the action
-      # auto-detects OIDC trusted publishing and mints its own token. Adding a password here
-      # would silently switch it back to token auth.
+      # action. No `password:` on purpose: with `id-token: write` present the action auto-detects
+      # OIDC trusted publishing and mints its own token; adding one would silently switch it back
+      # to token auth.
       - name: Publish to PyPI (OIDC trusted publishing)
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          # Fail loudly if the version already exists (re-run or a release-please collision)
+          # Fail loudly if the version already exists (a re-run, or a release-please collision)
           # rather than reporting success while publishing nothing.
           skip-existing: false
 
   docker:
     name: Build and push image to GHCR
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
 
     permissions:
@@ -106,9 +209,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
-      # Sets up BuildKit, which `docker/build-push-action` needs for the cache configuration
-      # below to take effect.
+      # Sets up BuildKit, which `docker/build-push-action` needs for the cache configuration below
+      # to take effect.
       - uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
@@ -119,25 +224,29 @@ jobs:
           # GITHUB_TOKEN is sufficient for GHCR; `packages: write` above is what authorises it.
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Tags are derived from the release tag by the action itself. The Dockerfile's
-      # `git describe` is a *local dev fallback* only and is not consulted here — metadata-action
-      # is what names this image, so a shallow checkout cannot produce a SHA-tagged image.
-      #   v1.2.3 -> 1.2.3, 1.2, latest
-      # `latest` is implicit ("auto" flavour emits it for `type=semver`), so it is not listed.
-      # v6, not v5: v5 is `runs.using: node20` and no longer starts on hosted runners, the same
-      # reason checkout@v4 and release-please-action@v4 are not used here.
+      # This trigger is a push, not a tag push, so metadata-action's usual `type=semver` auto-
+      # detection has no `refs/tags/...` to read and would emit nothing. Both tag lines therefore
+      # pass the release tag in explicitly through `value=`, taken straight from the release-please
+      # output — no version string is re-derived from git, so nothing can silently normalize a tag
+      # into a different one. Verified offline against metadata-action v6 behaviour:
+      #   v0.1.0 -> v0.1.0, 0.1, latest
+      # `latest` comes from the action itself: for a non-prerelease, semver emits it (flavour
+      # `latest=auto`), so it is deliberately not written out as a raw tag — that also keeps a
+      # prerelease from moving `latest`. If `tag_name` were ever empty, the lines below match
+      # nothing and the build fails on an empty tag list rather than pushing a mislabelled image;
+      # the `if:` on this job is what makes that unreachable in practice.
       - name: Derive image tags and labels
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/dreadster3/youtube-mcp
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern=v{{version}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-please.outputs.tag_name }}
 
       # Context is the repo ROOT, not deploy/: the Dockerfile copies pyproject.toml, uv.lock,
-      # README.md and src/, and the venv it builds records `src/` as the package path through
-      # the editable install. A narrower context would break both the metadata build and the
+      # README.md and src/, and the venv it builds records `src/` as the package path through the
+      # editable install. A narrower context would break both the metadata build and the
       # entrypoint.
       - name: Build and push
         uses: docker/build-push-action@v7

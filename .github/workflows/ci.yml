@@ -1,12 +1,20 @@
 # CI for youtube-mcp.
 #
-# The whole suite is offline: `task check` (ruff lint + ruff format --check + uv lock --check +
-# pytest) and `task typecheck` (strict mypy) touch no network and need no secrets — no
-# YOUTUBE_API_KEY, no repository secret, nothing. That is why every push and PR runs them with
-# no skip logic, no matrix and no conditional gating.
+# The whole suite is offline: ruff lint + ruff format --check + uv lock --check + pytest and
+# strict mypy touch no network and need no secrets — no YOUTUBE_API_KEY, no repository secret,
+# nothing. That is why every push and PR runs them with no skip logic, no matrix and no
+# conditional gating.
 #
-# `task check` deliberately excludes mypy (see Taskfile.yaml), so type checking is its own step
-# below — CI enforces the gate the local task leaves out.
+# One check per job: lint, fmt-check, lock-check, test and typecheck are five separate jobs so
+# they run in parallel and each shows up as its own required-check name. They are deliberately
+# NOT chained with `needs:` — all five start at once. The Taskfile's `check` aggregate still
+# bundles lint + fmt-check + lock-check + test for local use. `check` deliberately excludes mypy
+# (see Taskfile.yaml), so typecheck is its own job here — CI enforces the gate the local task
+# leaves out.
+#
+# All five jobs cache the uv cache directory via setup-uv's enable-cache. That cache is per-job,
+# so the concurrent jobs overlap on the same key namespace: expect a cold miss for each and
+# last-writer-wins churn on the first run of a ref. Wall-clock cost, not a correctness one.
 
 name: CI
 
@@ -27,8 +35,12 @@ permissions:
   contents: read
 
 jobs:
-  ci:
-    name: check + typecheck
+  # The five check jobs intentionally omit `name:`, so each job id IS the check-run name
+  # (`lint`, `fmt-check`, ...) that branch protection points at. Only `docker` overrides it.
+  #
+  # Each check job repeats the same three-step setup trio. The pins and their rationale are
+  # spelled out once, on the `lint` job below; the other four point back at it.
+  lint:
     runs-on: ubuntu-latest
     steps:
       # v7, not v4 as originally sketched: actions/checkout@v4 declares `runs.using: node20`,
@@ -53,15 +65,64 @@ jobs:
       # 2026-08). `version` is left at its `3.x` default, matching the Taskfile's `version: "3"`.
       - uses: go-task/setup-task@v2
 
-      - name: task check (lint + fmt-check + lock-check + test)
-        run: task check
+      - name: task lint (ruff check — strict)
+        run: task lint
+
+  fmt-check:
+    runs-on: ubuntu-latest
+    steps:
+      # Same setup trio as the `lint` job — see the pin rationale there.
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - uses: go-task/setup-task@v2
+
+      - name: task fmt-check (ruff format --check, non-mutating)
+        run: task fmt-check
+
+  lock-check:
+    runs-on: ubuntu-latest
+    steps:
+      # Same setup trio as the `lint` job — see the pin rationale there.
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - uses: go-task/setup-task@v2
+
+      - name: task lock-check (uv.lock matches pyproject.toml)
+        run: task lock-check
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # Same setup trio as the `lint` job — see the pin rationale there.
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - uses: go-task/setup-task@v2
+
+      - name: task test (full offline pytest suite)
+        run: task test
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      # Same setup trio as the `lint` job — see the pin rationale there.
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - uses: go-task/setup-task@v2
 
       - name: task typecheck (strict mypy over src)
         run: task typecheck
 
   # Optional and non-required: builds deploy/Dockerfile so the image cannot silently rot. The
   # container image is the deploy artifact, but the build is the slow, network-touching action
-  # here, so it is deliberately not in the `ci` job above.
+  # here, so it is deliberately not one of the check jobs above.
   #
   # Build only, not a start-up probe: create_app/main fail fast without YOUTUBE_API_KEY, so
   # probing /health would need a throwaway key in CI for no coverage this suite lacks. There is
