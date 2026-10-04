@@ -39,8 +39,8 @@ class Settings(BaseSettings):
     )
 
     # MCP server transport. stdio is the default: the primary deployment is a local agent
-    # launching the server as a subprocess. The container image pins MCP_TRANSPORT=http so
-    # `/health` and the HTTP probe path keep working there (deploy/Dockerfile).
+    # launching the server as a subprocess, and the container image keeps that same default
+    # (deploy/Dockerfile). Set MCP_TRANSPORT=http explicitly for the HTTP surface.
     mcp_transport: Literal["http", "stdio"] = "stdio"
     mcp_host: str = "0.0.0.0"
     mcp_port: int = Field(default=8088, ge=1, le=65535)

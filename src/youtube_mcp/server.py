@@ -13,8 +13,9 @@ Two transports (section 12), both entered through the `youtube-mcp` console scri
   auth. Every tool works identically here — nothing in the tool surface is HTTP-only.
 - **http** — `MCP_TRANSPORT=http youtube-mcp`, or `uvicorn youtube_mcp.server:create_app
   --factory`. Built with `stateless_http=True` so any replica can serve any request (sticky
-  sessions do not work: most MCP clients do not forward cookies). The container image pins
-  this transport so `/health` stays probeable.
+  sessions do not work: most MCP clients do not forward cookies). The container image keeps the
+  stdio default and takes this transport as an explicit `MCP_TRANSPORT=http` override, so
+  `/health` stays probeable.
 
 There is deliberately no module-level `app`: a factory is what allows `--factory`, injecting
 test doubles, and importing the module for introspection without a key.

@@ -10,7 +10,7 @@ def test_defaults(clean_env: None) -> None:
     settings = Settings()
     assert settings.youtube_transcript_lang == "en"
     # stdio is the default: the primary deployment is a local agent launching a subprocess.
-    # The container image overrides it to http (deploy/Dockerfile).
+    # The container image keeps the same stdio default (deploy/Dockerfile).
     assert settings.mcp_transport == "stdio"
     assert (settings.mcp_host, settings.mcp_port) == ("0.0.0.0", 8088)
     assert settings.fastmcp_stateless_http is True
