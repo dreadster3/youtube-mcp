@@ -13,7 +13,7 @@
 # downloading one. uv itself never reaches the runtime stage.
 FROM python:3.14-slim AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:0.12.11 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
 
 # `copy` keeps the venv relocatable (no hardlinks into the uv cache, which is not copied).
 ENV UV_LINK_MODE=copy
