@@ -1,0 +1,83 @@
+# CI for youtube-mcp.
+#
+# The whole suite is offline: `task check` (ruff lint + ruff format --check + uv lock --check +
+# pytest) and `task typecheck` (strict mypy) touch no network and need no secrets — no
+# YOUTUBE_API_KEY, no repository secret, nothing. That is why every push and PR runs them with
+# no skip logic, no matrix and no conditional gating.
+#
+# `task check` deliberately excludes mypy (see Taskfile.yaml), so type checking is its own step
+# below — CI enforces the gate the local task leaves out.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Superseded runs are pointless on a suite this fast: a new commit to the same ref cancels the
+# previous run instead of queueing behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: check + typecheck
+    runs-on: ubuntu-latest
+    steps:
+      # v7, not v4 as originally sketched: actions/checkout@v4 declares `runs.using: node20`,
+      # and Node 20 was removed from GitHub Actions runners on 2026-09-23 with no opt-out, so
+      # @v4 no longer executes. v5+ are node24; v7 is current and still gets v4/v5/v6 backports.
+      - uses: actions/checkout@v7
+
+      # Pinned to the exact current release rather than a floating major on purpose: upstream
+      # stopped publishing a floating major tag after v7 (the v7 tag is frozen at 7.6.0 from
+      # 2026-03, pre-dating v8's immutable-release/secure-tag hardening), and v10.2.0 is the
+      # latest release. Bump this line when a newer v10.x lands. The uv binary itself is
+      # resolved from the repository, so this ref only fixes the install/cache mechanics, never
+      # the uv version CI runs. enable-cache is setup-uv's built-in GitHub Actions cache for
+      # the uv cache directory.
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+
+      # The two candidates named for this were checked and do not exist: both
+      # ardalanamini/setup-go-task and dcarbone/install-task-action return 404 as of 2026-10.
+      # go-task/setup-task is the Task org's own action (maintained, node24, last release
+      # 2026-08). `version` is left at its `3.x` default, matching the Taskfile's `version: "3"`.
+      - uses: go-task/setup-task@v2
+
+      - name: task check (lint + fmt-check + lock-check + test)
+        run: task check
+
+      - name: task typecheck (strict mypy over src)
+        run: task typecheck
+
+  # Optional and non-required: builds deploy/Dockerfile so the image cannot silently rot. The
+  # container image is the deploy artifact, but the build is the slow, network-touching action
+  # here, so it is deliberately not in the `ci` job above.
+  #
+  # Build only, not a start-up probe: create_app/main fail fast without YOUTUBE_API_KEY, so
+  # probing /health would need a throwaway key in CI for no coverage this suite lacks. There is
+  # also no `docker-smoke` task to call — this repo has only `docker-build` (the earlier docker
+  # tasks were removed in fb2647e), and re-adding one is out of scope for this change.
+  #
+  # Runs on main pushes and manual dispatch only. Per-PR path filtering (deploy/** or src/**)
+  # is skipped: a job-level path check needs an extra dependency (e.g. dorny/paths-filter),
+  # which a non-required build job does not justify. Promote it to a required check if the
+  # image becomes the real deploy path.
+  docker:
+    name: docker-build (non-required)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: go-task/setup-task@v2
+      - name: task docker-build
+        run: task docker-build

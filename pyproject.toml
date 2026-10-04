@@ -1,5 +1,5 @@
 [project]
-name = "youtube-mcp"
+name = "dreadster3-youtube-mcp"
 version = "0.1.0"
 description = "Self-hosted MCP server exposing YouTube transcripts, search, comments and stats."
 readme = "README.md"

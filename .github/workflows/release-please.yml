@@ -1,0 +1,57 @@
+# Release PR automation: keeps a "chore(main): release x.y.z" PR open on `main`, and when
+# that PR is merged it tags `vX.Y.Z` and creates the GitHub Release. `release.yml` is the
+# other half — it fires on that Release and publishes the artifacts.
+#
+# The changelog is built from CONVENTIONAL COMMITS ONLY (`feat:`, `fix:`, `perf:`, ...).
+# Because this repo squash-merges, the *pull request title* becomes the commit subject, so a
+# PR titled "add quota counter" produces no changelog entry and no version bump; "feat: add
+# quota counter" does. PR titles are the thing to get right here, not the commits inside.
+#
+# `release-type: python` locates the version in the root `pyproject.toml` under
+# `[project] version` — static here, so it is bumped in place. Two notes on how that strategy
+# behaves with this repo's layout:
+#   - It also *tries* to rewrite `__version__ = "..."` in `<name>/__init__.py` and
+#     `src/<name>/__init__.py`. Our package lives at `src/youtube_mcp/__init__.py` and the
+#     distribution name is `dreadster3-youtube-mcp`, so none of the paths it derives match:
+#     it logs a "file did not exist" warning and moves on. No failure, nothing to fix.
+#   - `src/youtube_mcp/__init__.py` deliberately has no version literal (it reads
+#     `importlib.metadata.version()`), so even a matching path would be a no-op.
+#
+# OPERATOR SETUP — read before relying on this:
+#   The default `GITHUB_TOKEN` cannot start workflows. Releases/tags/PRs created by
+#   release-please with it do NOT trigger `release.yml` (GitHub suppresses workflow runs from
+#   events caused by GITHUB_TOKEN, to stop recursive loops). Pick one and do it deliberately:
+#     (a) Create a fine-grained PAT (contents: write, pull-requests: write on this repo) as
+#         secret `RELEASE_PLEASE_TOKEN` and pass `token: ${{ secrets.RELEASE_PLEASE_TOKEN }}`
+#         below. Then merging the release PR runs `release.yml` automatically. <- preferred
+#     (b) Keep the default token and re-run `release.yml` manually (workflow_dispatch) after
+#         each release-please release.
+#   Without one of these the release is tagged but no wheel reaches PyPI and no image is built.
+
+name: release-please
+
+"on":
+  push:
+    branches: [main]
+
+# Only what release-please needs to write: the release PR, the tag and the Release.
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  # Never cancels: two overlapping runs could both try to open a release PR. Serialising is
+  # what makes the release PR deterministic.
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      # v4 (and earlier) is `runs.using: node20`; Node 20 was removed from the hosted runners,
+      # so v4 no longer starts. v5 is `node24`. Same reason `release.yml` uses checkout@v7.
+      - uses: googleapis/release-please-action@v5
+        with:
+          release-type: python
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}

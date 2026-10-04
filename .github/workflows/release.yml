@@ -1,0 +1,154 @@
+# Publishes the two release artifacts when a GitHub Release is published:
+#   job `pypi`   — sdist + wheel to PyPI, via OIDC Trusted Publishing (no API token stored).
+#   job `docker` — the container image to GHCR (build context is the repo root; see below).
+#
+# Trigger is `released`, not `created`: `created` also fires for drafts, which would publish a
+# draft release's artifacts. `released` fires when a release (or draft) is published.
+#
+# ---------------------------------------------------------------------------------------
+# OPERATOR SETUP — REQUIRED, one time. Nothing here can do it for you, and until it is done
+# the `pypi` job fails at upload with a 403 / "trusted publishing" error.
+#
+#   PyPI has no way to pre-create a project from a workflow. Register a *pending publisher*
+#   instead, which authorises this exact workflow to create the `dreadster3-youtube-mcp`
+#   project on its first successful upload:
+#
+#     1. Sign in at https://pypi.org as the account that will own the project.
+#     2. Go to https://pypi.org/manage/account/publishing/ (Account -> Publishing).
+#     3. Under "Add a new pending publisher", choose GitHub and fill in EXACTLY:
+#          PyPI Project Name : dreadster3-youtube-mcp
+#          Owner             : dreadster3
+#          Repository name   : youtube-mcp
+#          Workflow name     : release.yml         <- the FILENAME only, not the full path
+#          Environment name  : pypi
+#        Every field is matched literally (case-sensitive). `youtube-mcp` alone is a
+#        different project owned by someone else, which is why the distribution is
+#        namespaced by owner.
+#     4. Save. The first publish converts the pending publisher into a normal one.
+#
+#   The three names above are coupled to this file and must stay in sync:
+#       environment name `pypi`  == `environment: pypi` on the `pypi` job
+#       workflow filename        == this file's name, `.github/workflows/release.yml`
+#       dist name                == `[project] name` in pyproject.toml
+#
+#   For container pulls: the GHCR package is private on first push. Make it public under
+#   https://github.com/users/dreadster3/packages/container/youtube-mcp/settings if it should
+#   be pullable without auth.
+# ---------------------------------------------------------------------------------------
+
+name: release
+
+"on":
+  release:
+    types: [released]
+
+# Workflow-level default is the narrowest that works; each job re-declares what it needs so a
+# `write` permission added to one job can never leak into the other (notably no `id-token` on
+# the docker job).
+permissions:
+  contents: read
+
+concurrency:
+  # Keyed by the tag: a re-published release re-runs cleanly, and two releases never interleave.
+  # Not cancelled — a half-finished PyPI upload cannot be safely retried, and PyPI rejects a
+  # duplicate version anyway. `skip-existing: false` below makes that failure loud, not silent.
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  pypi:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    environment: pypi
+
+    # `id-token: write` is the whole mechanism: the job exchanges its OIDC identity for a
+    # short-lived PyPI token, so no long-lived API token exists to leak or rotate.
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      # v4 is `node20` and no longer runs (Node 20 removed from the hosted images); v7 is node24.
+      - uses: actions/checkout@v7
+
+      # Exact pin, not @v10: no floating major ref exists past v7 upstream, so `@v10` would not
+      # resolve. Needs no `python-version` — `uv build` uses the interpreter uv manages, and the
+      # build itself is isolated from the runner's Python.
+      - uses: astral-sh/setup-uv@v10.2.0
+
+      # Produces `dist/dreadster3_youtube_mcp-<version>.tar.gz` and `...-py3-none-any.whl`. The
+      # filenames are derived from the normalized distribution name, so they are the fastest
+      # check that the rename to `dreadster3-youtube-mcp` took effect.
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: List built distributions
+        run: ls -l dist/
+
+      # `release/v1` is a maintained branch, not a tag — the only ref pypa documents for this
+      # action. No `password:` on purpose: with `id-token: write` present the action
+      # auto-detects OIDC trusted publishing and mints its own token. Adding a password here
+      # would silently switch it back to token auth.
+      - name: Publish to PyPI (OIDC trusted publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Fail loudly if the version already exists (re-run or a release-please collision)
+          # rather than reporting success while publishing nothing.
+          skip-existing: false
+
+  docker:
+    name: Build and push image to GHCR
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Sets up BuildKit, which `docker/build-push-action` needs for the cache configuration
+      # below to take effect.
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          # GITHUB_TOKEN is sufficient for GHCR; `packages: write` above is what authorises it.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tags are derived from the release tag by the action itself. The Dockerfile's
+      # `git describe` is a *local dev fallback* only and is not consulted here — metadata-action
+      # is what names this image, so a shallow checkout cannot produce a SHA-tagged image.
+      #   v1.2.3 -> 1.2.3, 1.2, latest
+      # `latest` is implicit ("auto" flavour emits it for `type=semver`), so it is not listed.
+      # v6, not v5: v5 is `runs.using: node20` and no longer starts on hosted runners, the same
+      # reason checkout@v4 and release-please-action@v4 are not used here.
+      - name: Derive image tags and labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/dreadster3/youtube-mcp
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      # Context is the repo ROOT, not deploy/: the Dockerfile copies pyproject.toml, uv.lock,
+      # README.md and src/, and the venv it builds records `src/` as the package path through
+      # the editable install. A narrower context would break both the metadata build and the
+      # entrypoint.
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # GHA cache keeps the uv sync layer warm between releases; `ignore-error` so a cache
+          # outage cannot fail an otherwise good release.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max,ignore-error=true
