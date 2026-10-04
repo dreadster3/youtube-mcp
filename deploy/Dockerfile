@@ -41,13 +41,19 @@ RUN groupadd --gid "${APP_GID}" app \
 # Image-level defaults only; everything here is overridable per deployment (§12).
 # DATABASE_PATH is absolute because the CWD-relative default (`cache.db`) would land in
 # /app and vanish on restart.
-# MCP_TRANSPORT=http: the config default is stdio (local agents), but a container is
-# long-running and wants the HTTP surface — without this the image would exit on stdin EOF.
+# MCP_TRANSPORT is deliberately NOT set: the image keeps the code default (stdio), so it is a
+# drop-in local-agent server and `docker run youtube-mcp` behaves like `uv run youtube-mcp`.
+# The transport follows MCP_TRANSPORT when the deployment sets it. Two run shapes:
+#   stdio (default): docker run -i --rm -e YOUTUBE_API_KEY=... youtube-mcp:dev
+#     `-i` is required: the agent drives stdin/stdout. With YOUTUBE_API_KEY set and no piped
+#     stdin the server reads EOF and exits 0 immediately — correct MCP stdio behaviour, not a
+#     crash (a keyless run fails fast, exit 1, before EOF matters).
+#   http (override): docker run --rm -p 8088:8088 -e MCP_TRANSPORT=http -e YOUTUBE_API_KEY=... youtube-mcp:dev
+#     long-running service; GET /health answers and `docker stop` is clean.
 ENV VIRTUAL_ENV=/app/.venv \
     PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    DATABASE_PATH=/data/cache.db \
-    MCP_TRANSPORT=http
+    DATABASE_PATH=/data/cache.db
 
 WORKDIR /app
 

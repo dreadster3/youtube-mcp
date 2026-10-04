@@ -340,16 +340,20 @@ and a `python:3.13-slim` runtime that copies **only** the venv (`/app/.venv`) an
 non-root user (`app`, uid/gid 10001, overridable at build time via `APP_UID`/`APP_GID`).
 
 The entrypoint is the `youtube-mcp` console script, which dispatches on `MCP_TRANSPORT`. The image
-**defaults that to `http`** (so `/health` answers and the container stays up as a long-running
-service); override it for a stdio container that an agent attaches to:
+sets no transport of its own, so it **defaults to `stdio`** — the same default as a local run. Run it
+with `-i` and the agent on the other end drives it over stdin/stdout; with `YOUTUBE_API_KEY` set and
+no piped stdin the server reads EOF and exits 0 immediately (correct MCP stdio behaviour, not a
+crash), while a keyless run fails fast with exit 1 before EOF matters. Set
+`MCP_TRANSPORT=http` to serve it as a long-running HTTP service instead (`/health` answers):
 
 ```bash
-# HTTP (default in the image)
-docker run --rm -p 8088:8088 -e YOUTUBE_API_KEY=... youtube-mcp:dev
-docker run --rm -p 9000:9000 -e YOUTUBE_API_KEY=... -e MCP_PORT=9000 youtube-mcp:dev
+# stdio (default in the image) — `-i` keeps stdin open; EOF ends the server
+# (an MCP client launches it this way; see the JSON config above)
+docker run -i --rm -e YOUTUBE_API_KEY=... youtube-mcp:dev
 
-# stdio — no ports; the agent on the other end drives it over stdin/stdout
-docker run -i --rm -e YOUTUBE_API_KEY=... -e MCP_TRANSPORT=stdio youtube-mcp:dev
+# HTTP — explicit `MCP_TRANSPORT=http`, long-running, /health on the published port
+docker run --rm -p 8088:8088 -e YOUTUBE_API_KEY=... -e MCP_TRANSPORT=http youtube-mcp:dev
+docker run --rm -p 9000:9000 -e YOUTUBE_API_KEY=... -e MCP_TRANSPORT=http -e MCP_PORT=9000 youtube-mcp:dev
 ```
 
 `DATABASE_PATH=/data/cache.db` is the image default, and `/data` exists and is writable by the
@@ -384,7 +388,7 @@ Do not build these without being asked — explicitly out of scope:
 Answered, for the record (previously open questions):
 
 - **Transport.** stdio is the default for a local agent; HTTP is the opt-in for shared/deployed use.
-  The container image flips that default back to HTTP.
+  The container image keeps that same stdio default and takes HTTP as an explicit `MCP_TRANSPORT=http`.
 - **Auth.** None. This is a local stdio server; HTTP mode is expected to sit behind a trusted
   boundary.
 - **Cache persistence.** Ephemeral. No volume in the container; set `DATABASE_PATH` to a mounted
