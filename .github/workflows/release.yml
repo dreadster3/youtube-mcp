@@ -31,11 +31,11 @@
 # WHAT THE OWNER CONTROLS
 #   (a) WHEN a release happens. Nothing is published until the release PR is merged — that merge is
 #       the release decision, and it is the only gate on both the container image and the upload.
-#   (b) RECOMMENDED second gate, for the PyPI upload: give the `pypi` environment required
-#       reviewers (Settings -> Environments -> `pypi` -> Required reviewers). The `pypi` job then
-#       pauses before any of its steps run and waits for an approval click, so a release becomes
-#       "release PR merged" AND "owner clicked approve". Set it up once; it needs no workflow
-#       change because `environment: pypi` below is already the hook.
+#   (b) RECOMMENDED second gate, for the PyPI upload: add required reviewers on the `release`
+#       environment (Settings -> Environments -> `release` -> Required reviewers). The `pypi` job
+#       then pauses before any of its steps run and waits for an approval click, so a release
+#       becomes "release PR merged" AND "owner clicked approve". Set it up once; it needs no
+#       workflow change because `environment: release` below is already the hook.
 #
 # HONEST NOTE — PyPI has NO staged publishing, so the upload is live the moment it succeeds.
 #   npm's staging area lets you inspect a tarball and then promote or drop it. PyPI has no such
@@ -44,7 +44,7 @@
 #   never be reused — a bad upload must be yanked (still downloadable, still installable by exact
 #   version) and superseded by a new release, never replaced. The GHCR push is equally final.
 #   So the owner's control points really are just the two above: the merge, and the optional
-#   `pypi` environment approval. There is no post-upload review step to design, and step (b) is
+#   `release` environment approval. There is no post-upload review step to design, and step (b) is
 #   what buys back most of what npm staging gave you. It is recommended, not mandatory: without it
 #   the merge publishes by itself.
 #
@@ -71,14 +71,17 @@
 #           Owner             : dreadster3
 #           Repository name   : youtube-mcp
 #           Workflow name     : release.yml        <- the FILENAME only, not the full path
-#           Environment name  : pypi
+#           Environment name  : release
 #      Every field is matched literally (case-sensitive). `youtube-mcp` alone is a different
 #      project owned by someone else, which is why the distribution is namespaced by owner.
 #      Save; the first publish converts the pending publisher into a normal one.
 #      These three names are coupled to this file and must stay in sync:
-#        environment name `pypi` == `environment: pypi` on the `pypi` job
-#        workflow filename       == this file's name, `.github/workflows/release.yml`
-#        dist name               == `[project] name` in pyproject.toml
+#        environment name `release` == `environment: release` on the `pypi` job
+#        workflow filename         == this file's name, `.github/workflows/release.yml`
+#        dist name                 == `[project] name` in pyproject.toml
+#      The environment must exist for its protection rules to apply: create it under
+#      Settings -> Environments -> "New environment" -> `release`, or let the first run
+#      auto-create it with no rules (which would leave the approval gate inactive).
 #
 #   2. GHCR visibility (optional). The package is private on first push. Make it public under
 #      https://github.com/users/dreadster3/packages/container/youtube-mcp/settings if the image
@@ -147,8 +150,10 @@ jobs:
     runs-on: ubuntu-latest
 
     # The environment is the owner-approval hook described in the header; with required reviewers
-    # configured it also gates every step below, not just the upload.
-    environment: pypi
+    # configured it also gates every step below, not just the upload. The name matches the PyPI
+    # pending publisher's "Environment name" field: `release`, not `pypi`. The JOB id stays `pypi`
+    # on purpose — the job publishes TO PyPI — only the environment is named `release`.
+    environment: release
 
     # `id-token: write` is the whole mechanism: the job exchanges its OIDC identity for a
     # short-lived PyPI token, so no long-lived API token exists to leak or rotate.
