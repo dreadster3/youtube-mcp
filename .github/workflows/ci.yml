@@ -1,0 +1,155 @@
+# CI for youtube-mcp.
+#
+# The whole suite is offline: ruff lint + ruff format --check + uv lock --check + pytest and
+# strict mypy touch no network and need no secrets — no YOUTUBE_API_KEY, no repository secret,
+# nothing. That is why every push and PR runs them with no skip logic, no matrix and no
+# conditional gating.
+#
+# One check per job: lint, fmt-check, lock-check, test and typecheck are five separate jobs so
+# they run in parallel and each shows up as its own required-check name. They are deliberately
+# NOT chained with `needs:` — all five start at once. The Taskfile's `check` aggregate still
+# bundles lint + fmt-check + lock-check + test for local use. `check` deliberately excludes mypy
+# (see Taskfile.yaml), so typecheck is its own job here — CI enforces the gate the local task
+# leaves out.
+#
+# All five jobs cache the uv cache directory via setup-uv's enable-cache. That cache is per-job,
+# so the concurrent jobs overlap on the same key namespace: expect a cold miss for each and
+# last-writer-wins churn on the first run of a ref. Wall-clock cost, not a correctness one.
+
+name: CI
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Superseded runs are pointless on a suite this fast: a new commit to the same ref cancels the
+# previous run instead of queueing behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The five check jobs intentionally omit `name:`, so each job id IS the check-run name
+  # (`lint`, `fmt-check`, ...) that branch protection points at. Only `docker` overrides it.
+  #
+  # Each check job repeats the same three-step setup trio. The pins and their rationale are
+  # spelled out once, on the `lint` job below; the other four point back at it.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      # v7, not v4 as originally sketched: actions/checkout@v4 declares `runs.using: node20`,
+      # and Node 20 was removed from GitHub Actions runners on 2026-09-23 with no opt-out, so
+      # @v4 no longer executes. v5+ are node24; v7 is current and still gets v4/v5/v6 backports.
+      - uses: actions/checkout@v7
+
+      # Pinned to the exact current release rather than a floating major on purpose: upstream
+      # stopped publishing a floating major tag after v7 (the v7 tag is frozen at 7.6.0 from
+      # 2026-03, pre-dating v8's immutable-release/secure-tag hardening), and v10.2.0 is the
+      # latest release. Bump this line when a newer v10.x lands. The uv binary itself is
+      # resolved from the repository, so this ref only fixes the install/cache mechanics, never
+      # the uv version CI runs. enable-cache is setup-uv's built-in GitHub Actions cache for
+      # the uv cache directory.
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+
+      # The two candidates named for this were checked and do not exist: both
+      # ardalanamini/setup-go-task and dcarbone/install-task-action return 404 as of 2026-10.
+      # go-task/setup-task is the Task org's own action (maintained, node24, last release
+      # 2026-08). `version` is left at its `3.x` default, matching the Taskfile's `version: "3"`.
+      - uses: go-task/setup-task@v2
+
+      - name: task lint (ruff check — strict)
+        run: task lint
+
+  fmt-check:
+    runs-on: ubuntu-latest
+    steps:
+      # Same setup trio as the `lint` job — see the pin rationale there.
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - uses: go-task/setup-task@v2
+
+      - name: task fmt-check (ruff format --check, non-mutating)
+        run: task fmt-check
+
+  lock-check:
+    runs-on: ubuntu-latest
+    steps:
+      # Same setup trio as the `lint` job — see the pin rationale there.
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - uses: go-task/setup-task@v2
+
+      - name: task lock-check (uv.lock matches pyproject.toml)
+        run: task lock-check
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # Same setup trio as the `lint` job — see the pin rationale there.
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - uses: go-task/setup-task@v2
+
+      - name: task test (full offline pytest suite)
+        run: task test
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      # Same setup trio as the `lint` job — see the pin rationale there.
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - uses: go-task/setup-task@v2
+
+      - name: task typecheck (strict mypy over src)
+        run: task typecheck
+
+  # Optional and non-required: builds deploy/Dockerfile so the image cannot silently rot. The
+  # container image is the deploy artifact, but the build is the slow, network-touching action
+  # here, so it is deliberately not one of the check jobs above.
+  #
+  # Build only, not a start-up probe: create_app/main fail fast without YOUTUBE_API_KEY, so
+  # probing /health would need a throwaway key in CI for no coverage this suite lacks. There is
+  # also no `docker-smoke` task to call — this repo has only `docker-build` (the earlier docker
+  # tasks were removed in fb2647e), and re-adding one is out of scope for this change.
+  #
+  # No `if:` — this job runs on every trigger: push(main), pull_request(main) and
+  # workflow_dispatch alike. The every-PR docker build is intentional — the image is the release
+  # artifact and must always build, so a Dockerfile that stopped building fails on the PR that
+  # broke it rather than after merge. It is a few minutes slower but deliberate. Honest per-PR
+  # cost: the whole build every run — no cross-run layer cache is configured here (no
+  # buildx/gha cache, this job runs plain `docker build`), so each PR pays the full Dockerfile
+  # plus its network fetches cold.
+  #
+  # Per-PR path filtering (deploy/** or src/**) is skipped for that same reason: always building
+  # is the requirement, not a thing to filter around, and a job-level path check would need an
+  # extra dependency (e.g. dorny/paths-filter) anyway. Promote it to a required check if the
+  # image becomes the real deploy path.
+  docker:
+    name: docker-build (non-required)
+    runs-on: ubuntu-latest
+    steps:
+      # Shallow by default (fetch-depth 1, fetch-tags false), so no tags land in the checkout and
+      # the Taskfile's `git describe --tags --always` degrades to the bare SHA — the image is
+      # tagged `youtube-mcp:<sha>` on PRs and on untagged main commits alike, not with a release
+      # tag. Fine here: this job only proves the image builds.
+      - uses: actions/checkout@v7
+      - uses: go-task/setup-task@v2
+      - name: task docker-build
+        run: task docker-build
