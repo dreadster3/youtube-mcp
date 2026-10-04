@@ -129,19 +129,39 @@ jobs:
       # v5, not v4: v4 is `runs.using: node20` and Node 20 was removed from the hosted runners, so
       # v4 no longer starts. Every pin in this file is a node24 build for the same reason
       # (checkout@v7, metadata-action@v6 rather than v5).
+      # Manifest mode. The release strategy and the tag shape live in the repo-root config file,
+      # not on this step: `release-please-config.json` declares the single package "." with
+      # `release-type: python`, `include-component-in-tag: false` (tag = plain `vX.Y.Z`, no
+      # component prefix — what this repo's tags have always looked like) and `include-v-in-tag:
+      # true`. `.release-please-manifest.json` tracks the released version per package and is
+      # seeded `0.0.0` — release-please's "never released" SENTINEL, which is exactly right here:
+      # no tag or Release exists yet. Do not "fix" it to the current version: a real version in the
+      # manifest backfills it as last-released-at-unknown-sha, so every commit counts from the
+      # beginning of history and the first release jumps to a phantom 0.2.0. With the sentinel,
+      # `Python.initialReleaseVersion()` (0.1.0) gives this repo its intended first release, 0.1.0.
+      # release-please rewrites the file with the real version inside each release PR.
+      # No `release-type` input here on purpose — one source of truth. The action falls through to
+      # `Manifest.fromManifest(...)` only when `release-type` is EMPTY, so passing it inline would
+      # silently ignore both config files (verified against release-please-action@v5 `src/index.ts`:
+      # `if (inputs.releaseType) { Manifest.fromConfig(...) } else { Manifest.fromManifest(...) }`).
+      #
+      # The `python` strategy reads the root `pyproject.toml`'s `[project] version` — static here,
+      # so it is bumped in place. Two notes on how this strategy behaves with our layout, recorded
+      # so nobody re-investigates them:
+      #   - It also *tries* to rewrite `__version__ = "..."` in `<name>/__init__.py` and
+      #     `src/<name>/__init__.py`. Our package lives at `src/youtube_mcp/__init__.py` and
+      #     the distribution name is `dreadster3-youtube-mcp`, so none of the derived paths
+      #     match: it logs a "file did not exist" warning and moves on. Harmless, nothing to fix.
+      #   - `src/youtube_mcp/__init__.py` deliberately has no version literal (it reads
+      #     `importlib.metadata.version()`), so even a matching path would be a no-op.
+      #
+      # Note for the first run after this switch: the pending release PR was opened before the
+      # manifest existed. See the config/manifest PR's description before merging that release PR.
       - id: release
         uses: googleapis/release-please-action@v5
         with:
-          # `python` reads the root `pyproject.toml`'s `[project] version` — static here, so it is
-          # bumped in place and no release-please manifest file is needed. Two notes on how this
-          # strategy behaves with our layout, recorded so nobody re-investigates them:
-          #   - It also *tries* to rewrite `__version__ = "..."` in `<name>/__init__.py` and
-          #     `src/<name>/__init__.py`. Our package lives at `src/youtube_mcp/__init__.py` and
-          #     the distribution name is `dreadster3-youtube-mcp`, so none of the derived paths
-          #     match: it logs a "file did not exist" warning and moves on. Harmless, nothing to fix.
-          #   - `src/youtube_mcp/__init__.py` deliberately has no version literal (it reads
-          #     `importlib.metadata.version()`), so even a matching path would be a no-op.
-          release-type: python
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
 
   pypi:
     name: Build and publish to PyPI
