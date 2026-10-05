@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/dreadster3/youtube-mcp/compare/v0.1.0...v0.2.0) (2026-10-05)
+
+
+### Features
+
+* **renovate:** enable renovate ([#17](https://github.com/dreadster3/youtube-mcp/issues/17)) ([2431838](https://github.com/dreadster3/youtube-mcp/commit/2431838a7739bb3539dda8aeb620d7ad3da6ad2d))
+
+
+### Bug Fixes
+
+* **deps:** update dependency fastmcp to v4.0.11 ([#9](https://github.com/dreadster3/youtube-mcp/issues/9)) ([3cc063f](https://github.com/dreadster3/youtube-mcp/commit/3cc063f4f5ce85378a98d8689ace674b2800c0b1))
+
 ## 0.1.0 (2026-10-04)
 
 
