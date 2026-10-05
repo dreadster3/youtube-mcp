@@ -46,7 +46,7 @@ jobs:
       # v7, not v4 as originally sketched: actions/checkout@v4 declares `runs.using: node20`,
       # and Node 20 was removed from GitHub Actions runners on 2026-09-23 with no opt-out, so
       # @v4 no longer executes. v5+ are node24; v7 is current and still gets v4/v5/v6 backports.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Pinned to the exact current release rather than a floating major on purpose: upstream
       # stopped publishing a floating major tag after v7 (the v7 tag is frozen at 7.6.0 from
@@ -63,7 +63,7 @@ jobs:
       # ardalanamini/setup-go-task and dcarbone/install-task-action return 404 as of 2026-10.
       # go-task/setup-task is the Task org's own action (maintained, node24, last release
       # 2026-08). `version` is left at its `3.x` default, matching the Taskfile's `version: "3"`.
-      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
 
       - name: task lint (ruff check — strict)
         run: task lint
@@ -72,11 +72,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Same setup trio as the `lint` job — see the pin rationale there.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
-      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
 
       - name: task fmt-check (ruff format --check, non-mutating)
         run: task fmt-check
@@ -85,11 +85,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Same setup trio as the `lint` job — see the pin rationale there.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
-      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
 
       - name: task lock-check (uv.lock matches pyproject.toml)
         run: task lock-check
@@ -98,11 +98,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Same setup trio as the `lint` job — see the pin rationale there.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
-      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
 
       - name: task test (full offline pytest suite)
         run: task test
@@ -111,11 +111,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Same setup trio as the `lint` job — see the pin rationale there.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
-      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
 
       - name: task typecheck (strict mypy over src)
         run: task typecheck
@@ -149,7 +149,7 @@ jobs:
       # the Taskfile's `git describe --tags --always` degrades to the bare SHA — the image is
       # tagged `youtube-mcp:<sha>` on PRs and on untagged main commits alike, not with a release
       # tag. Fine here: this job only proves the image builds.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
       - name: task docker-build
         run: task docker-build
