@@ -40,7 +40,10 @@ CLIENT_ERROR_MESSAGES: dict[type[client_module.YouTubeApiError], str] = {
         "the YouTube API rate-limited this request; it is transient — retry shortly"
     ),
     client_module.NotFoundError: "the requested resource does not exist on YouTube",
-    client_module.CommentsDisabledError: "comments are disabled on this video",
+    client_module.CommentsDisabledError: (
+        "comments are disabled on this video; that is final, not transient — do not ask for "
+        "its comments again and do not retry"
+    ),
     client_module.InvalidRequestError: "the YouTube API rejected the request parameters",
     client_module.UpstreamError: (
         "the YouTube API call failed upstream (server error or transport failure)"

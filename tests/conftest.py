@@ -95,6 +95,9 @@ class StubYouTubeClient:
     async def list_comment_threads(self, video_id: str, **kwargs: Any) -> Any:
         return await self._respond("list_comment_threads", {"video_id": video_id, **kwargs})
 
+    async def list_comment_replies(self, comment_id: str, **kwargs: Any) -> Any:
+        return await self._respond("list_comment_replies", {"comment_id": comment_id, **kwargs})
+
     async def list_video_categories(self, **kwargs: Any) -> Any:
         return await self._respond("list_video_categories", kwargs)
 

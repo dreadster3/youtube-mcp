@@ -1,0 +1,68 @@
+{
+  "kind": "youtube#commentThreadListResponse",
+  "etag": "Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr",
+  "nextPageToken": "Qg8QAA",
+  "pageInfo": { "totalResults": 2400000, "resultsPerPage": 1 },
+  "items": [
+    {
+      "kind": "youtube#commentThread",
+      "etag": "St0Uv1Wx2Yz3Ab4Cd5Ef6Gh7Ij",
+      "id": "UgxKZ0nQ_1a2b3c4d5e6f7g8",
+      "snippet": {
+        "videoId": "dQw4w9WgXcQ",
+        "channelId": "UCuAXFkgsw1L7xaCfbd5SE8p",
+        "isPublic": true,
+        "canReply": true,
+        "totalReplyCount": 42,
+        "topLevelComment": {
+          "kind": "youtube#comment",
+          "etag": "Wx1Yz2Ab3Cd4Ef5Gh6Ij7Kl8Mn",
+          "id": "UgxKZ0nQ_1a2b3c4d5e6f7g8",
+          "snippet": {
+            "textDisplay": "Best song ever written.",
+            "authorDisplayName": "Alice",
+            "authorProfileImageUrl": "https://yt3.ggpht.com/alice.jpg",
+            "authorChannelUrl": "http://www.youtube.com/channel/UC_alice",
+            "authorChannelId": { "value": "UC_alice_channel_id" },
+            "likeCount": 42,
+            "publishedAt": "2020-01-02T03:04:05Z",
+            "updatedAt": "2020-01-02T03:04:05Z",
+            "viewerRating": "none",
+            "channelId": "UCuAXFkgsw1L7xaCfbd5SE8p",
+            "videoId": "dQw4w9WgXcQ"
+          }
+        }
+      },
+      "replies": {
+        "comments": [
+          {
+            "kind": "youtube#comment",
+            "etag": "Kl9Mn0Op1Qr2St3Uv4Wx5Yz6Ab",
+            "id": "UgxKZ0nQ_rep1",
+            "snippet": {
+              "textDisplay": "Agreed, timeless.",
+              "authorDisplayName": "Carol",
+              "authorChannelId": { "value": "UC_carol_channel_id" },
+              "likeCount": 7,
+              "publishedAt": "2020-01-03T00:00:00Z",
+              "parentId": "UgxKZ0nQ_1a2b3c4d5e6f7g8"
+            }
+          },
+          {
+            "kind": "youtube#comment",
+            "etag": "Cd1Ef2Gh3Ij4Kl5Mn6Op7Qr8St",
+            "id": "UgxKZ0nQ_rep2",
+            "snippet": {
+              "textDisplay": "My childhood in one song.",
+              "authorDisplayName": "Dave",
+              "authorChannelId": { "value": "UC_dave_channel_id" },
+              "likeCount": 1,
+              "publishedAt": "2020-01-04T00:00:00Z",
+              "parentId": "UgxKZ0nQ_1a2b3c4d5e6f7g8"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

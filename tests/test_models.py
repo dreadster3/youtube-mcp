@@ -15,6 +15,7 @@ from youtube_mcp.youtube import models
 from youtube_mcp.youtube.models import (
     BatchStatsResponse,
     Channel,
+    CommentReplyPage,
     CommentThreadPage,
     PlaylistItemPage,
     SearchResults,
@@ -232,6 +233,25 @@ def test_comment_thread_uses_total_reply_count_not_reply_array_length():
 
     assert thread.total_reply_count == 500
     assert len(raw["replies"]["comments"]) == 2
+    # The replies that did arrive are parsed — as a sample, never as the whole set.
+    assert [reply.comment_id for reply in thread.replies] == ["R1", "R2"]
+
+
+def test_comment_thread_without_replies_gets_an_empty_list():
+    page = CommentThreadPage.from_api(
+        {"items": [{"id": "T1", "snippet": {"topLevelComment": {"id": "C1"}}}]}
+    )
+
+    assert page.items[0].replies == []
+
+
+def test_comment_reply_page_shape():
+    page = CommentReplyPage.from_api(fixture("comment_replies.json"))
+
+    assert page.next_page_token == "Qm9va1BhZ2Uy"
+    assert [item.comment_id for item in page.items] == ["UgxKZ0nQ_rep1", "UgxKZ0nQ_rep2"]
+    assert page.items[0].author_name == "Carol"
+    assert page.items[0].like_count == 7
 
 
 def test_comment_without_author_channel_or_likes_defaults():

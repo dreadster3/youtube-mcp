@@ -1,0 +1,37 @@
+{
+  "kind": "youtube#commentListResponse",
+  "etag": "Ef1Gh2Ij3Kl4Mn5Op6Qr7St8Uv",
+  "nextPageToken": "Qm9va1BhZ2Uy",
+  "pageInfo": { "totalResults": 42, "resultsPerPage": 2 },
+  "items": [
+    {
+      "kind": "youtube#comment",
+      "etag": "Wx9Yz8Ab7Cd6Ef5Gh4Ij3Kl2Mn",
+      "id": "UgxKZ0nQ_rep1",
+      "snippet": {
+        "textDisplay": "Agreed, timeless.",
+        "authorDisplayName": "Carol",
+        "authorProfileImageUrl": "https://yt3.ggpht.com/carol.jpg",
+        "authorChannelUrl": "http://www.youtube.com/channel/UC_carol",
+        "authorChannelId": { "value": "UC_carol_channel_id" },
+        "likeCount": 7,
+        "publishedAt": "2020-01-03T00:00:00Z",
+        "updatedAt": "2020-01-03T00:00:00Z",
+        "parentId": "UgxKZ0nQ_1a2b3c4d5e6f7g8"
+      }
+    },
+    {
+      "kind": "youtube#comment",
+      "etag": "Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr",
+      "id": "UgxKZ0nQ_rep2",
+      "snippet": {
+        "textDisplay": "My childhood in one song.",
+        "authorDisplayName": "Dave",
+        "authorChannelId": { "value": "UC_dave_channel_id" },
+        "likeCount": 1,
+        "publishedAt": "2020-01-04T00:00:00Z",
+        "parentId": "UgxKZ0nQ_1a2b3c4d5e6f7g8"
+      }
+    }
+  ]
+}
