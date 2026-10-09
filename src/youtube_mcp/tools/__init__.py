@@ -27,7 +27,8 @@ class Deps:
 
 def register_all(mcp: FastMCP, deps: Deps) -> None:
     """Register every section 8 tool group on `mcp`."""
-    from youtube_mcp.tools import data, transcripts
+    from youtube_mcp.tools import data, quota, transcripts
 
     transcripts.register(mcp, deps)
     data.register(mcp, deps)
+    quota.register(mcp, deps)

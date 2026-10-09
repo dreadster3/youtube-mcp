@@ -48,6 +48,7 @@ EXPECTED_TOOLS = {
     "youtube_get_channel",
     "youtube_list_channel_videos",
     "youtube_list_categories",
+    "youtube_get_quota_status",
 }
 
 
@@ -73,7 +74,7 @@ def resources(settings: Settings) -> ServerResources:
 # ------------------------------------------------------------------------ tool surface
 
 
-async def test_tools_list_exposes_exactly_the_eleven_namespaced_tools(
+async def test_tools_list_exposes_exactly_the_twelve_namespaced_tools(
     settings: Settings, resources: ServerResources
 ) -> None:
     mcp = build_mcp(settings, resources)
