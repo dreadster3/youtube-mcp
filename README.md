@@ -9,7 +9,7 @@ no account** — just a YouTube Data API key.
 One Python process: FastMCP server, YouTube Data API client, transcript fetching and cache all live
 in the same application. No sidecar, no second service, no Redis.
 
-- **11 tools**, all namespaced `youtube_*`, read-only public data.
+- **12 tools**, all namespaced `youtube_*`, read-only public data.
 - **stdio by default.** HTTP is available for a shared/deployed instance — see
   [Optional: HTTP mode / container](#optional-http-mode--container).
 - **API-key only.** No OAuth, no uploads, no channel management.
@@ -93,6 +93,7 @@ transcripts are.
 | `youtube_get_channel` | Channel by ID or `@handle`, plus its uploads playlist ID | shared (10,000/day) |
 | `youtube_list_channel_videos` | Channel uploads, newest first, via the uploads playlist | shared (10,000/day) |
 | `youtube_list_categories` | Video categories, optionally per region | shared (10,000/day) |
+| `youtube_get_quota_status` | Used/remaining per bucket for today, plus the reset time | none (reads the local counter) |
 
 Notes that the tool descriptions also carry, because the model is the main consumer:
 
@@ -110,6 +111,11 @@ Notes that the tool descriptions also carry, because the model is the main consu
 - `youtube_list_channel_videos` deliberately resolves the channel's uploads playlist and pages
   `playlistItems` instead of searching — 2 units from the large shared pool rather than 100/day.
   `youtube_search_videos` is the scarce, deliberate operation.
+- `youtube_get_quota_status` reports the server's own per-bucket counter — the same numbers
+  `/health` exposes — and spends nothing: it reads a local counter, never the API, and cannot raise
+  `quotaExceeded`. Like that counter it is **approximate and process-local**: it counts only this
+  process, resets to zero on restart, and knows nothing about another process using the same key, so
+  Google can still refuse a call this tool reports as affordable.
 - Transcripts are truncated at `RESPONSE_LIMIT` by cumulative characters (both variants) and return
   `next_cursor`; an uncapped 3-hour transcript would blow the model's context window.
 
@@ -272,7 +278,7 @@ Then, with an MCP client pointed at `http://localhost:8088/mcp` (the MCP Inspect
 way), or straight from the CLI:
 
 ```bash
-uv run fastmcp list http://localhost:8088/mcp --transport http   # should list all 11 tools
+uv run fastmcp list http://localhost:8088/mcp --transport http   # should list all 12 tools
 ```
 
 For stdio, the same call is `uv run fastmcp list --command "env YOUTUBE_API_KEY=$YOUTUBE_API_KEY uv run youtube-mcp"`,

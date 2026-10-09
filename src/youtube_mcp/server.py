@@ -76,7 +76,7 @@ def _low_remaining_logger(bucket: QuotaBucket, remaining: int) -> None:
 
 
 def build_mcp(settings: Settings, resources: ServerResources) -> FastMCP:
-    """Create the `FastMCP` server with the /health route and all 11 tools registered.
+    """Create the `FastMCP` server with the /health route and all 12 tools registered.
 
     Kept separate from `create_app` so tests can drive the same server through an in-memory
     `fastmcp.Client` without building (or living inside) an ASGI app.
