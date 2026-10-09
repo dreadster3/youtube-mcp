@@ -1,0 +1,15 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "The comment identified by the parentId parameter cannot be found.",
+        "domain": "youtube.comment",
+        "reason": "commentNotFound",
+        "locationType": "parameter",
+        "location": "parentId"
+      }
+    ],
+    "code": 404,
+    "message": "The comment identified by the parentId parameter cannot be found."
+  }
+}

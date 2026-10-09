@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import aiosqlite
+import httpx
 import pytest
 from fastmcp import Client
 
@@ -23,12 +24,12 @@ from youtube_mcp.config import Settings
 from youtube_mcp.tools import data as tools_data
 from youtube_mcp.youtube import models
 from youtube_mcp.youtube.client import (
-    CommentsDisabledError,
     InvalidRequestError,
     NotFoundError,
     QuotaExceededError,
     RateLimitedError,
     UpstreamError,
+    translate_error,
 )
 from youtube_mcp.youtube.quota import QuotaBucket, QuotaExceeded
 
@@ -350,18 +351,36 @@ async def test_get_video_stats_works_without_a_cache() -> None:
 # -------------------------------------------------------------------------- comments
 
 
-async def test_get_comments_returns_top_level_comments_only() -> None:
+async def test_get_comments_surfaces_reply_count_and_reply_sample() -> None:
+    page = models.CommentThreadPage.from_api(fixture("comment_threads_with_replies.json"))
+    mcp, stub = make_test_server(list_comment_threads=page)
+
+    result = await call_tool(
+        mcp, "youtube_get_comments", {"video_id": "dQw4w9WgXcQ", "include_replies": True}
+    )
+
+    assert result["video_id"] == "dQw4w9WgXcQ"
+    assert result["next_page_token"] == page.next_page_token
+    item = result["items"][0]
+    assert item["comment_id"] == "UgxKZ0nQ_1a2b3c4d5e6f7g8"
+    assert item["text"] == "Best song ever written."
+    assert item["author_name"] == "Alice"
+    # The count is the thread's, not len(replies) — the embedded replies are a sample.
+    assert item["total_reply_count"] == 42
+    assert [reply["author_name"] for reply in item["replies"]] == ["Carol", "Dave"]
+    assert stub.kwargs()["include_replies"] is True
+
+
+async def test_get_comments_replies_are_empty_not_null() -> None:
+    """Threads with no replies, and calls that did not ask for replies, both give `[]`."""
     page = models.CommentThreadPage.from_api(fixture("comment_threads.json"))
     mcp, stub = make_test_server(list_comment_threads=page)
 
     result = await call_tool(mcp, "youtube_get_comments", {"video_id": "dQw4w9WgXcQ"})
 
-    assert result["video_id"] == "dQw4w9WgXcQ"
-    assert result["next_page_token"] == page.next_page_token
-    assert len(result["items"]) == 2
-    # Replies are absent in v1: only the top-level comment is returned, and no reply text
-    # field can exist on the model.
-    assert "repl" not in str(result).lower()
+    assert [item["total_reply_count"] for item in result["items"]] == [3, 0]
+    assert all(item["replies"] == [] for item in result["items"])
+    assert stub.kwargs()["include_replies"] is False
 
 
 async def test_get_comments_passes_order_and_page_token() -> None:
@@ -380,18 +399,55 @@ async def test_get_comments_passes_order_and_page_token() -> None:
     assert kwargs["page_token"] == "Qg8QAA"
 
 
-async def test_get_comments_disabled_maps_to_a_friendly_message() -> None:
-    mcp, _ = make_test_server(
-        list_comment_threads=CommentsDisabledError(
-            "commentThreads: commentsDisabled (HTTP 403)", reason="commentsDisabled"
-        )
-    )
+async def test_get_comments_disabled_maps_to_a_one_line_stop_asking_message() -> None:
+    """section 5.4: the message must not read as "try again" — nothing will change."""
+    response = httpx.Response(403, json=fixture("comments_disabled_403.json"))
+    error = translate_error(response, method="commentThreads")
+    mcp, _ = make_test_server(list_comment_threads=error)
 
     message = await call_error(mcp, "youtube_get_comments", {"video_id": "v"})
 
-    assert "comments are disabled on this video" in message
-    assert "[commentsDisabled]" in message
+    assert message == (
+        "youtube_get_comments: comments are disabled on this video; that is final, not "
+        "transient — do not ask for its comments again and do not retry [commentsDisabled]"
+    )
     assert "httpx" not in message
+
+
+# ---------------------------------------------------------------------- replies
+
+
+async def test_get_comment_replies_pages_by_parent_comment_id() -> None:
+    page = models.CommentReplyPage.from_api(fixture("comment_replies.json"))
+    mcp, stub = make_test_server(list_comment_replies=page)
+
+    result = await call_tool(
+        mcp,
+        "youtube_get_comment_replies",
+        {"comment_id": "UgxKZ0nQ_1a2b3c4d5e6f7g8", "max_results": 100, "page_token": "page1"},
+    )
+
+    kwargs = stub.kwargs()
+    assert kwargs["comment_id"] == "UgxKZ0nQ_1a2b3c4d5e6f7g8"
+    assert kwargs["max_results"] == 100
+    assert kwargs["page_token"] == "page1"
+    assert result["comment_id"] == "UgxKZ0nQ_1a2b3c4d5e6f7g8"
+    assert [item["comment_id"] for item in result["items"]] == ["UgxKZ0nQ_rep1", "UgxKZ0nQ_rep2"]
+    assert result["items"][0]["author_name"] == "Carol"
+    assert result["next_page_token"] == page.next_page_token
+
+
+async def test_get_comment_replies_unknown_parent_is_a_not_found_error() -> None:
+    mcp, _ = make_test_server(
+        list_comment_replies=NotFoundError(
+            "comments: commentNotFound (HTTP 404)", reason="commentNotFound"
+        )
+    )
+
+    message = await call_error(mcp, "youtube_get_comment_replies", {"comment_id": "nope"})
+
+    assert "the requested resource does not exist on YouTube" in message
+    assert "[commentNotFound]" in message
 
 
 # --------------------------------------------------------------------------- channel

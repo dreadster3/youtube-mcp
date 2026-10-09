@@ -7,6 +7,7 @@ covers the tools and their structured output) and through `create_app` with an A
 
 from __future__ import annotations
 
+import json
 import signal
 import tempfile
 from pathlib import Path
@@ -45,6 +46,7 @@ EXPECTED_TOOLS = {
     "youtube_get_video",
     "youtube_get_video_stats",
     "youtube_get_comments",
+    "youtube_get_comment_replies",
     "youtube_get_channel",
     "youtube_list_channel_videos",
     "youtube_list_categories",
@@ -73,7 +75,7 @@ def resources(settings: Settings) -> ServerResources:
 # ------------------------------------------------------------------------ tool surface
 
 
-async def test_tools_list_exposes_exactly_the_eleven_namespaced_tools(
+async def test_tools_list_exposes_exactly_the_twelve_namespaced_tools(
     settings: Settings, resources: ServerResources
 ) -> None:
     mcp = build_mcp(settings, resources)
@@ -109,7 +111,9 @@ async def test_every_tool_has_a_substantive_description(
         ("youtube_get_video_stats", "10,000-call/day"),
         ("youtube_get_video", "shared"),
         ("youtube_get_comments", "shared"),
-        ("youtube_get_comments", "replies are not returned"),
+        ("youtube_get_comments", "sample of at most"),
+        ("youtube_get_comment_replies", "shared"),
+        ("youtube_get_comment_replies", "full"),
         ("youtube_list_channel_videos", "shared"),
         ("youtube_list_categories", "shared"),
     ],
@@ -125,23 +129,29 @@ async def test_quota_and_limitation_wording_is_present_in_descriptions(
     assert phrase in tools[tool_name].description
 
 
-async def test_comments_description_does_not_promise_reply_counts(
+async def test_comments_descriptions_call_the_embedded_replies_a_sample(
     settings: Settings, resources: ServerResources
 ) -> None:
-    """The Comment model has no `total_reply_count`, so the prose must not promise one."""
+    """The embedded `replies` are API-truncated, so both descriptions must say "sample, not all"."""
     mcp = build_mcp(settings, resources)
 
     async with Client(mcp) as client:
         tools = {tool.name: tool for tool in await client.list_tools()}
 
     comments = tools["youtube_get_comments"]
-    assert "total_reply_count" not in comments.description
-    assert "replies are not returned" in comments.description
-    assert "counts" in comments.description
+    assert "total_reply_count" in comments.description
+    assert "sample of at most" in comments.description
+    assert "not the full set" in comments.description
+    assert "replies are not returned" not in comments.description
     assert comments.output_schema is not None
-    assert "reply_count" not in comments.output_schema.get("properties", {}).get("items", {}).get(
-        "items", {}
-    ).get("properties", {})
+    assert "total_reply_count" in json.dumps(comments.output_schema)
+    assert "replies" in json.dumps(comments.output_schema)
+
+    replies = tools["youtube_get_comment_replies"]
+    assert "full" in replies.description
+    assert "sample" in replies.description
+    assert "total_reply_count" in replies.description
+    assert "parentId" in replies.description
 
 
 async def test_dislike_unavailability_is_stated_on_both_stat_tools(

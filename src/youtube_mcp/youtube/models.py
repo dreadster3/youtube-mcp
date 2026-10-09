@@ -100,8 +100,10 @@ def _as_text(value: Any) -> str:
     return "" if value is None else str(value)
 
 
-def _items[T](raw: Mapping[str, Any], factory: Callable[[Mapping[str, Any]], T]) -> list[T]:
-    return [factory(item) for item in raw.get("items") or [] if isinstance(item, Mapping)]
+def _items[T](
+    raw: Mapping[str, Any], factory: Callable[[Mapping[str, Any]], T], *, key: str = "items"
+) -> list[T]:
+    return [factory(item) for item in raw.get(key) or [] if isinstance(item, Mapping)]
 
 
 def _video_fields(raw: Mapping[str, Any]) -> dict[str, Any]:
@@ -327,7 +329,9 @@ class BatchStatsResponse(BaseModel):
 
 
 class Comment(BaseModel):
-    """A top-level comment (`commentThreads` `topLevelComment` / a `comments.list` item)."""
+    """A comment: a `commentThreads` `topLevelComment`, or a `comments.list` item — a reply
+    when the request filtered by `parentId`.
+    """
 
     comment_id: str
     text: str = ""
@@ -358,23 +362,30 @@ class CommentThread(BaseModel):
     """One `commentThreads.list` item.
 
     `total_reply_count` comes from the thread snippet, not `len(replies)` — the `replies`
-    part is truncated by the API.
+    part is truncated by the API. Checked against Google's `commentThreads` reference
+    (read 2026-09): `replies.comments[]` is documented as "a limited number of replies",
+    and "only a subset of the total number of replies available" unless its length equals
+    `totalReplyCount`. The docs name no number; the cap seen in the wild is 5, so treat
+    `replies` as a **sample** and page `comments.list?parentId=` for the full set.
     """
 
     thread_id: str
     video_id: str | None = None
     total_reply_count: int = 0
     comment: Comment
+    replies: list[Comment] = Field(default_factory=list)
 
     @classmethod
     def from_api(cls, raw: Mapping[str, Any]) -> Self:
         snippet = raw.get("snippet") or {}
         top_level = snippet.get("topLevelComment") or {}
+        replies = raw.get("replies") or {}
         return cls(
             thread_id=_as_text(raw.get("id")),
             video_id=snippet.get("videoId"),
             total_reply_count=to_int(snippet.get("totalReplyCount")) or 0,
             comment=Comment.from_api(top_level),
+            replies=_items(replies, Comment.from_api, key="comments"),
         )
 
 
@@ -389,6 +400,20 @@ class CommentThreadPage(BaseModel):
         return cls(
             next_page_token=raw.get("nextPageToken"),
             items=_items(raw, CommentThread.from_api),
+        )
+
+
+class CommentReplyPage(BaseModel):
+    """A page of `comments.list` replies to one parent comment."""
+
+    next_page_token: str | None = None
+    items: list[Comment] = Field(default_factory=list)
+
+    @classmethod
+    def from_api(cls, raw: Mapping[str, Any]) -> Self:
+        return cls(
+            next_page_token=raw.get("nextPageToken"),
+            items=_items(raw, Comment.from_api),
         )
 
 

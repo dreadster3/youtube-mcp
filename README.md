@@ -9,7 +9,7 @@ no account** — just a YouTube Data API key.
 One Python process: FastMCP server, YouTube Data API client, transcript fetching and cache all live
 in the same application. No sidecar, no second service, no Redis.
 
-- **11 tools**, all namespaced `youtube_*`, read-only public data.
+- **12 tools**, all namespaced `youtube_*`, read-only public data.
 - **stdio by default.** HTTP is available for a shared/deployed instance — see
   [Optional: HTTP mode / container](#optional-http-mode--container).
 - **API-key only.** No OAuth, no uploads, no channel management.
@@ -89,7 +89,8 @@ transcripts are.
 | `youtube_search_videos` | Search by keyword | **scarce: 100 calls/day, own bucket** |
 | `youtube_get_video` | Video metadata by ID — snippet, statistics, duration, status | shared (10,000/day) |
 | `youtube_get_video_stats` | View/like/comment counts for up to 50 IDs | **own 10,000/day bucket** via `videos:batchGetStats` |
-| `youtube_get_comments` | Top-level comments, `time` or `relevance` order, pageable | shared (10,000/day) |
+| `youtube_get_comments` | Top-level comments with each thread's `total_reply_count`, plus an optional truncated reply sample | shared (10,000/day) |
+| `youtube_get_comment_replies` | Every reply to one top-level comment, pageable (`comments.list?parentId`) | shared (10,000/day) |
 | `youtube_get_channel` | Channel by ID or `@handle`, plus its uploads playlist ID | shared (10,000/day) |
 | `youtube_list_channel_videos` | Channel uploads, newest first, via the uploads playlist | shared (10,000/day) |
 | `youtube_list_categories` | Video categories, optionally per region | shared (10,000/day) |
@@ -98,9 +99,12 @@ Notes that the tool descriptions also carry, because the model is the main consu
 
 - **No dislikes anywhere.** Not on videos, not on comments, not on `batchGetStats`. Tool
   descriptions say so explicitly so the model stops asking.
-- **Comments are top-level only in this version.** Replies are not returned — and neither are their
-  counts. Only top-level comments come back, so there is no reply text and no reply count to present;
-  never imply a reply was read.
+- **Reply counts are always there; the embedded reply text is a sample.** `youtube_get_comments`
+  reports the thread's `total_reply_count` on every item — the count to quote, and the number
+  YouTube gives, not `len(replies)`. With `include_replies=true` the items also carry `replies`:
+  the API truncates that list (docs: "a limited number of replies … only a subset", ~5 in
+  practice), so it is a sample, never the whole conversation. For complete replies to one comment
+  use `youtube_get_comment_replies` with that item's `comment_id`.
 - **Transcripts are unavailable for some videos, and that is normal.** Captions disabled by the
   uploader (`TRANSCRIPT_DISABLED`), no track in the requested language (`TRANSCRIPT_NOT_FOUND`),
   age-restricted due to broken upstream cookie auth in `youtube-transcript-api` 1.2.4
@@ -123,7 +127,7 @@ Three buckets, because Google counts them separately:
 | --- | --- | --- |
 | `search` | 100 calls/day | `search.list`, one unit per call — **including each additional page** |
 | `stats` | 10,000 calls/day | `videos:batchGetStats` only |
-| `shared` | 10,000 units/day | `videos.list`, `channels.list`, `playlistItems.list`, `commentThreads.list`, `videoCategories.list` |
+| `shared` | 10,000 units/day | `videos.list`, `channels.list`, `playlistItems.list`, `commentThreads.list`, `comments.list`, `videoCategories.list` |
 
 - Quotas reset at **midnight Pacific Time** (`America/Los_Angeles`, DST-aware). Not midnight UTC, not
   midnight local. A `403 quotaExceeded` means done for the day — the error message says "resets
@@ -272,7 +276,7 @@ Then, with an MCP client pointed at `http://localhost:8088/mcp` (the MCP Inspect
 way), or straight from the CLI:
 
 ```bash
-uv run fastmcp list http://localhost:8088/mcp --transport http   # should list all 11 tools
+uv run fastmcp list http://localhost:8088/mcp --transport http   # should list all 12 tools
 ```
 
 For stdio, the same call is `uv run fastmcp list --command "env YOUTUBE_API_KEY=$YOUTUBE_API_KEY uv run youtube-mcp"`,

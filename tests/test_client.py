@@ -364,6 +364,48 @@ async def test_list_comment_threads_rejects_out_of_range_max_results(max_results
     assert handler.attempts == 0
 
 
+async def test_list_comment_threads_can_embed_the_reply_sample():
+    handler = Recorder(ok(fixture("comment_threads_with_replies.json")))
+    client = make_client(handler)
+
+    page = await client.list_comment_threads("dQw4w9WgXcQ", include_replies=True)
+
+    assert handler.params()["part"] == "snippet,replies"
+    assert page.items[0].total_reply_count == 42
+    assert [reply.author_name for reply in page.items[0].replies] == ["Carol", "Dave"]
+
+
+async def test_list_comment_replies_params_and_pagination():
+    handler = Recorder(ok(fixture("comment_replies.json")))
+    client = make_client(handler)
+
+    page = await client.list_comment_replies(
+        "UgxKZ0nQ_1a2b3c4d5e6f7g8", max_results=100, page_token="page1"
+    )
+
+    assert handler.path() == "/youtube/v3/comments"
+    params = handler.params()
+    assert params["part"] == "snippet"
+    assert params["parentId"] == "UgxKZ0nQ_1a2b3c4d5e6f7g8"
+    assert params["maxResults"] == "100"
+    assert params["pageToken"] == "page1"
+    assert params["textFormat"] == "plainText"
+    assert [item.author_name for item in page.items] == ["Carol", "Dave"]
+    assert page.next_page_token == "Qm9va1BhZ2Uy"
+
+
+@pytest.mark.parametrize("max_results", [0, 101])
+async def test_list_comment_replies_rejects_out_of_range_max_results(max_results):
+    """comments.list is 1–100, the same range as commentThreads.list."""
+    handler = Recorder(ok({}))
+    client = make_client(handler)
+
+    with pytest.raises(ValueError, match="max_results must be between 1 and 100"):
+        await client.list_comment_replies("c", max_results=max_results)
+
+    assert handler.attempts == 0
+
+
 async def test_list_video_categories_params():
     handler = Recorder(ok(fixture("video_categories.json")))
     client = make_client(handler)
@@ -414,6 +456,7 @@ async def test_stats_methods_consume_their_own_buckets():
         lambda client: client.list_channel(channel_id="UC1"),
         lambda client: client.list_playlist_items("PL1"),
         lambda client: client.list_comment_threads("v"),
+        lambda client: client.list_comment_replies("c"),
         lambda client: client.list_video_categories(),
     ],
 )
@@ -469,6 +512,7 @@ async def test_quota_counter_uses_injected_clock():
         ("rate_limit_exceeded_429.json", 429, RateLimitedError),
         ("user_rate_limit_exceeded_403.json", 403, RateLimitedError),
         ("comments_disabled_403.json", 403, CommentsDisabledError),
+        ("comment_not_found_404.json", 404, NotFoundError),
         ("channel_not_found_404.json", 404, NotFoundError),
         ("playlist_not_found_404.json", 404, NotFoundError),
         ("video_not_found_404.json", 404, NotFoundError),
@@ -673,6 +717,7 @@ async def test_quota_exceeded_is_never_retried():
     ("fixture_name", "status", "expected"),
     [
         ("comments_disabled_403.json", 403, CommentsDisabledError),
+        ("comment_not_found_404.json", 404, NotFoundError),
         ("invalid_page_token_400.json", 400, InvalidRequestError),
         ("video_not_found_404.json", 404, NotFoundError),
     ],

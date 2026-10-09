@@ -145,7 +145,13 @@ _RATE_LIMIT_REASONS = frozenset(
     {"rateLimitExceeded", "userRateLimitExceeded", "concurrentLimitExceeded"}
 )
 _NOT_FOUND_REASONS = frozenset(
-    {"channelNotFound", "playlistNotFound", "videoNotFound", "commentThreadNotFound"}
+    {
+        "channelNotFound",
+        "playlistNotFound",
+        "videoNotFound",
+        "commentThreadNotFound",
+        "commentNotFound",
+    }
 )
 _INVALID_REQUEST_REASONS = frozenset(
     {
@@ -538,14 +544,20 @@ class YouTubeClient:
         order: CommentOrder | None = "time",
         page_token: str | None = None,
         text_format: Literal["plainText", "html"] = "plainText",
+        include_replies: bool = False,
     ) -> models.CommentThreadPage:
-        """`commentThreads.list` — shared pool. maxResults is 1–100 (not 0–50)."""
+        """`commentThreads.list` — shared pool. maxResults is 1–100 (not 0–50).
+
+        `include_replies` adds the `replies` part, which the API truncates to a sample of
+        each thread's replies (see `models.CommentThread`); `totalReplyCount` stays the
+        authoritative count either way.
+        """
         _check_range("max_results", max_results, MIN_COMMENT_RESULTS, MAX_COMMENT_RESULTS)
         self._quota.consume(QuotaBucket.SHARED)
         raw = await self._get(
             "commentThreads",
             {
-                "part": "snippet",
+                "part": "snippet,replies" if include_replies else "snippet",
                 "videoId": video_id,
                 "maxResults": max_results,
                 "order": order,
@@ -554,6 +566,34 @@ class YouTubeClient:
             },
         )
         return models.CommentThreadPage.from_api(raw)
+
+    async def list_comment_replies(
+        self,
+        comment_id: str,
+        *,
+        max_results: int = 20,
+        page_token: str | None = None,
+        text_format: Literal["plainText", "html"] = "plainText",
+    ) -> models.CommentReplyPage:
+        """`comments.list?parentId` — every reply to one top-level comment. Shared pool.
+
+        One unit per page, and maxResults is 1–100 like `commentThreads.list`. This is the
+        only way to get the *complete* reply set: the `replies` part of a comment thread is
+        a truncated sample.
+        """
+        _check_range("max_results", max_results, MIN_COMMENT_RESULTS, MAX_COMMENT_RESULTS)
+        self._quota.consume(QuotaBucket.SHARED)
+        raw = await self._get(
+            "comments",
+            {
+                "part": "snippet",
+                "parentId": comment_id,
+                "maxResults": max_results,
+                "pageToken": page_token,
+                "textFormat": text_format,
+            },
+        )
+        return models.CommentReplyPage.from_api(raw)
 
     async def list_video_categories(
         self,
