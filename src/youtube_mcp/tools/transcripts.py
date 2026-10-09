@@ -31,6 +31,7 @@ from youtube_mcp.transcript.fetch import (
     TranscriptSnippet,
     TranscriptTrackList,
     fetch_transcript,
+    fetch_translated_transcript,
     list_transcript_tracks,
 )
 
@@ -43,13 +44,19 @@ MATCH_PAGE_SIZE = 20
 
 
 class TranscriptResult(BaseModel):
-    """A slice of a transcript as plain text."""
+    """A slice of a transcript as plain text.
+
+    `is_translated` / `translated_from` record provenance: when set, the text is YouTube's
+    translation of the `translated_from` track, not the creator's words.
+    """
 
     video_id: str
     text: str
     language: str
     language_code: str
     is_generated: bool
+    is_translated: bool = False
+    translated_from: str | None = None
     truncated: bool
     next_cursor: int | None
 
@@ -63,12 +70,18 @@ class TranscriptSegment(BaseModel):
 
 
 class TimestampedSegments(BaseModel):
-    """A slice of a transcript as timed segments. `next_cursor` is a segment index."""
+    """A slice of a transcript as timed segments. `next_cursor` is a segment index.
+
+    `is_translated` / `translated_from` record provenance: when set, the segments are YouTube's
+    translation of the `translated_from` track, not the creator's words.
+    """
 
     video_id: str
     language: str
     language_code: str
     is_generated: bool
+    is_translated: bool = False
+    translated_from: str | None = None
     segments: list[TranscriptSegment]
     truncated: bool
     next_cursor: int | None
@@ -211,6 +224,21 @@ def _languages(deps: Deps, languages: list[str] | None) -> list[str]:
     return list(languages) if languages else [deps.settings.youtube_transcript_lang]
 
 
+async def _fetch_maybe_translated(
+    deps: Deps,
+    video_id: str,
+    languages: list[str] | None,
+    translate_to: str | None,
+) -> Transcript:
+    """The native transcript, or YouTube's translation of another track when asked for one."""
+    cache = await ensure_connected(deps.cache)
+    if translate_to is None:
+        return await fetch_transcript(video_id, _languages(deps, languages), cache=cache)
+    return await fetch_translated_transcript(
+        video_id, translate_to, _languages(deps, languages), cache=cache
+    )
+
+
 def _transcript_result(
     deps: Deps, transcript: Transcript, cursor: int | None, *, timestamps: bool
 ) -> TranscriptResult:
@@ -228,6 +256,8 @@ def _transcript_result(
         language=transcript.language,
         language_code=transcript.language_code,
         is_generated=transcript.is_generated,
+        is_translated=transcript.is_translated,
+        translated_from=transcript.translated_from,
         truncated=next_cursor is not None,
         next_cursor=next_cursor,
     )
@@ -242,9 +272,10 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         video_id: str,
         languages: list[str] | None = None,
         include_timestamps: bool = False,
+        translate_to: str | None = None,
         cursor: int | None = None,
     ) -> TranscriptResult:
-        """Fetch a YouTube video's transcript as plain text.
+        """Fetch a YouTube video's transcript as plain text, optionally translated.
 
         Returns the caption text for one 11-character video ID, with the language that was
         actually used, whether it is auto-generated, and `next_cursor`.
@@ -253,21 +284,31 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         `include_timestamps` is true a marker is inserted wherever the caption minute changes
         (a word-level auto-generated track gets far fewer markers than segments).
 
+        `translate_to` asks YouTube to translate the caption track that `languages` selects into
+        that language code, so a caller can read a video that has no captions of its own
+        language. Get valid targets from `youtube_list_transcript_languages`
+        (`translatable_to`). The text returned is **YouTube's machine translation, not the
+        creator's words**: it is not a translation this server performed, and it can be wrong.
+        `is_translated` is true when the text differs in language from the track it came from,
+        `translated_from` carries that track's language code, and `is_generated` is always true
+        for a translation because YouTube's translation is machine output. Paging, truncation
+        and the cursor contract are the same as for an untranslated transcript.
+
         Long transcripts are truncated at the server's `RESPONSE_LIMIT` and cut on caption
         boundaries: read `next_cursor` and call again with it to get the following page —
         `next_cursor: null` (and `truncated: false`) means you have the whole thing. Each
         page repeats the time anchor of its first segment.
 
         Costs no YouTube Data API quota: transcripts are scraped from YouTube's internal
-        caption endpoint, not the Data API. They are cached forever, so a repeat call is free.
-        Failures are expected and specific — captions may be disabled, absent in the requested
-        languages, or the IP may be blocked (transient). Age-restricted videos cannot be read.
+        caption endpoint, not the Data API, and translation is a parameter on that same
+        endpoint. They are cached forever, so a repeat call is free — translated pages under
+        their own cache key, never mixed with the untranslated ones. Failures are expected and
+        specific — captions may be disabled, absent in the requested languages, or the IP may
+        be blocked (transient). A language the video cannot be translated into is an
+        `INVALID_REQUEST` error: check the listing, do not retry. Age-restricted videos cannot
+        be read.
         """
-        transcript = await fetch_transcript(
-            video_id,
-            _languages(deps, languages),
-            cache=await ensure_connected(deps.cache),
-        )
+        transcript = await _fetch_maybe_translated(deps, video_id, languages, translate_to)
         return _transcript_result(deps, transcript, cursor, timestamps=include_timestamps)
 
     @mcp.tool
@@ -275,9 +316,10 @@ def register(mcp: FastMCP, deps: Deps) -> None:
     async def youtube_get_timestamped_transcript(
         video_id: str,
         languages: list[str] | None = None,
+        translate_to: str | None = None,
         cursor: int | None = None,
     ) -> TimestampedSegments:
-        """Fetch a YouTube video's transcript as timed segments.
+        """Fetch a YouTube video's transcript as timed segments, optionally translated.
 
         Returns every caption segment as `{text, start, duration}`, where `start` is seconds
         from the video's beginning and `duration` is on-screen time (segments overlap, so
@@ -285,16 +327,21 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         (`https://youtu.be/<video_id>?t=<start>`); use `youtube_get_transcript` when you only
         need the words.
 
+        `translate_to` returns YouTube's translation into that language code (valid targets:
+        `youtube_list_transcript_languages`), with the segment timings of the track it was made
+        from. The words are **YouTube's machine translation, not the creator's words** — use it
+        to read a video whose captions are in another language, and quote it as such.
+        `is_translated` and `translated_from` report that provenance; `is_generated` is always
+        true for a translation.
+
         Long transcripts are truncated at `RESPONSE_LIMIT` by cumulative text length.
         `next_cursor` is the index of the next segment — pass it back to continue;
         `null` means you have all segments. Same caching and failure modes as
-        `youtube_get_transcript`; this costs no Data API quota.
+        `youtube_get_transcript`; this costs no Data API quota, translated or not, and a target
+        language the video cannot be translated into is an `INVALID_REQUEST` error, not a
+        transient one.
         """
-        transcript = await fetch_transcript(
-            video_id,
-            _languages(deps, languages),
-            cache=await ensure_connected(deps.cache),
-        )
+        transcript = await _fetch_maybe_translated(deps, video_id, languages, translate_to)
         snippets, next_cursor = _segment_window(
             transcript.snippets,
             start=max(0, cursor or 0),
@@ -305,6 +352,8 @@ def register(mcp: FastMCP, deps: Deps) -> None:
             language=transcript.language,
             language_code=transcript.language_code,
             is_generated=transcript.is_generated,
+            is_translated=transcript.is_translated,
+            translated_from=transcript.translated_from,
             segments=[
                 TranscriptSegment(text=s.text, start=s.start, duration=s.duration) for s in snippets
             ],

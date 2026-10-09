@@ -7,7 +7,7 @@ youtube.com or the host environment.
 
 import re
 import time
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Iterator, Sequence
 from typing import Any
 
 import anyio
@@ -23,9 +23,11 @@ from youtube_transcript_api import (
     InvalidVideoId,
     IpBlocked,
     NoTranscriptFound,
+    NotTranslatable,
     PoTokenRequired,
     RequestBlocked,
     TranscriptsDisabled,
+    TranslationLanguageNotAvailable,
     VideoUnavailable,
     VideoUnplayable,
     YouTubeDataUnparsable,
@@ -53,6 +55,7 @@ from youtube_mcp.transcript.fetch import (
     TranscriptTrackList,
     build_proxy_config,
     fetch_transcript,
+    fetch_translated_transcript,
     list_transcript_tracks,
 )
 
@@ -76,6 +79,33 @@ class _FakeTranslationLanguage:
         self.language_code = language_code
 
 
+class FakeTranslatedTrack:
+    """What the library's `Transcript.translate(target)` returns: a track that only `fetch`es."""
+
+    def __init__(
+        self, target: str, name: str, snippets: Sequence[tuple[str, float, float]]
+    ) -> None:
+        self.target = target
+        self._name = name
+        self._snippets = snippets
+        self.fetch_calls = 0
+
+    def fetch(self, preserve_formatting: bool = False) -> FetchedTranscript:
+        self.fetch_calls += 1
+        return FetchedTranscript(
+            snippets=[
+                FetchedTranscriptSnippet(text, start, duration)
+                for text, start, duration in self._snippets
+            ],
+            video_id=VIDEO_ID,
+            language=self._name,
+            language_code=self.target,
+            # 1.2.4 hard-codes `is_generated=True` in `Transcript.translate`, so a translation of
+            # an uploaded track still reports as generated.
+            is_generated=True,
+        )
+
+
 class FakeTrack:
     """Stand-in for the library's `Transcript`: only the fields we map are present."""
 
@@ -86,15 +116,30 @@ class FakeTrack:
         *,
         is_generated: bool = False,
         translatable_to: Sequence[str] = (),
+        translated_snippets: Sequence[tuple[str, float, float]] = (("translated", 0.0, 1.0),),
     ) -> None:
         self.language = language
         self.language_code = language_code
         self.is_generated = is_generated
         self.translation_languages = [_FakeTranslationLanguage(code) for code in translatable_to]
+        self._translation_names = {
+            language.language_code: language.language for language in self.translation_languages
+        }
+        self._translated_snippets = translated_snippets
 
     @property
     def is_translatable(self) -> bool:
         return len(self.translation_languages) > 0
+
+    def translate(self, language_code: str) -> FakeTranslatedTrack:
+        """Same guard order as the library: untranslatable track first, then unknown target."""
+        if not self.is_translatable:
+            raise NotTranslatable(VIDEO_ID)
+        if language_code not in self._translation_names:
+            raise TranslationLanguageNotAvailable(VIDEO_ID)
+        return FakeTranslatedTrack(
+            language_code, self._translation_names[language_code], self._translated_snippets
+        )
 
 
 def fetched(*snippets: tuple[str, float, float], language_code: str = "en") -> FetchedTranscript:
@@ -110,6 +155,24 @@ def fetched(*snippets: tuple[str, float, float], language_code: str = "en") -> F
     )
 
 
+class FakeTranscriptList:
+    """Stand-in for the library's `TranscriptList`: iterable, and `find_transcript` picks one."""
+
+    def __init__(self, tracks: Sequence[FakeTrack]) -> None:
+        self._tracks = list(tracks)
+
+    def __iter__(self) -> Iterator[FakeTrack]:
+        return iter(self._tracks)
+
+    def find_transcript(self, language_codes: Sequence[str]) -> FakeTrack:
+        """Library order: manually created tracks first, then generated ones, then NOT_FOUND."""
+        for is_generated in (False, True):
+            for track in self._tracks:
+                if track.language_code in language_codes and track.is_generated is is_generated:
+                    return track
+        raise NoTranscriptFound(VIDEO_ID, list(language_codes), self)
+
+
 class FakeApi:
     """Fake `YouTubeTranscriptApi` that records calls and runs a scripted outcome."""
 
@@ -121,7 +184,7 @@ class FakeApi:
         list_result: Any = None,
     ) -> None:
         self._result = result
-        self._list_result = [] if list_result is None else list_result
+        self._list_result = FakeTranscriptList([] if list_result is None else list_result)
         self._error = error
         self._delay = delay
         self.fetch_calls: list[tuple[str, tuple[str, ...], bool]] = []
@@ -233,6 +296,16 @@ def _library_failures() -> list[tuple[str, BaseException, TranscriptErrorCode]]:
             "youtube_request_failed_500",
             YouTubeRequestFailed(VIDEO_ID, http_error),
             TranscriptErrorCode.UPSTREAM_ERROR,
+        ),
+        (
+            "not_translatable",
+            NotTranslatable(VIDEO_ID),
+            TranscriptErrorCode.INVALID_REQUEST,
+        ),
+        (
+            "translation_language_not_available",
+            TranslationLanguageNotAvailable(VIDEO_ID),
+            TranscriptErrorCode.INVALID_REQUEST,
         ),
         # Unmapped `CouldNotRetrieveTranscript` subclass: the catch-all bucket, not INVALID_REQUEST.
         (
@@ -488,6 +561,201 @@ async def test_transcript_model_is_json_persistable(monkeypatch: pytest.MonkeyPa
         ).tracks
         == []
     )
+
+
+# --- translation --------------------------------------------------------------------------
+
+
+async def test_translate_maps_provenance_and_the_target_language(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    api = FakeApi(
+        list_result=[
+            FakeTrack(
+                "English",
+                "en",
+                translatable_to=["de"],
+                translated_snippets=(("hallo", 0.0, 1.5),),
+            )
+        ]
+    )
+    patch_api(monkeypatch, api)
+
+    transcript = await fetch_translated_transcript(VIDEO_ID, "de", ["en"])
+
+    assert (transcript.video_id, transcript.language_code) == (VIDEO_ID, "de")
+    assert transcript.is_translated is True
+    assert transcript.translated_from == "en"
+    # The library reports a translation as generated even off a hand-uploaded track.
+    assert transcript.is_generated is True
+    assert [(s.text, s.start, s.duration) for s in transcript.snippets] == [("hallo", 0.0, 1.5)]
+    assert api.list_calls == [VIDEO_ID]
+    assert api.fetch_calls == []  # the untranslated track was never fetched
+
+
+async def test_translate_prefers_the_first_source_language_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    api = FakeApi(
+        list_result=[
+            FakeTrack("German", "de", translatable_to=["en"]),
+            FakeTrack("English", "en", translatable_to=["de"]),
+        ]
+    )
+    patch_api(monkeypatch, api)
+
+    transcript = await fetch_translated_transcript(VIDEO_ID, "en", ["de", "en"])
+
+    assert transcript.translated_from == "de"
+    assert transcript.language_code == "en"
+
+
+async def test_en_to_en_is_served_but_not_claimed_as_a_translation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Target == source track language: served (YouTube allows it) but no provenance claim."""
+    patch_api(
+        monkeypatch, FakeApi(list_result=[FakeTrack("English", "en", translatable_to=["en"])])
+    )
+
+    transcript = await fetch_translated_transcript(VIDEO_ID, "en", ["en"])
+
+    assert transcript.language_code == "en"
+    assert transcript.is_translated is False
+    assert transcript.translated_from is None
+
+
+async def test_translation_language_not_available_is_invalid_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_api(
+        monkeypatch, FakeApi(list_result=[FakeTrack("English", "en", translatable_to=["de"])])
+    )
+
+    with pytest.raises(TranscriptError) as raised:
+        await fetch_translated_transcript(VIDEO_ID, "fr", ["en"])
+
+    assert raised.value.code is TranscriptErrorCode.INVALID_REQUEST
+    assert raised.value.retryable is False
+    assert "youtube_list_transcript_languages" in raised.value.message
+    _assert_short_message(raised.value)
+
+
+async def test_untranslatable_track_is_invalid_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A track with no translation languages at all: terminal, not a retryable upstream blip."""
+    patch_api(monkeypatch, FakeApi(list_result=[FakeTrack("English", "en")]))
+
+    with pytest.raises(TranscriptError) as raised:
+        await fetch_translated_transcript(VIDEO_ID, "de", ["en"])
+
+    assert raised.value.code is TranscriptErrorCode.INVALID_REQUEST
+    assert raised.value.retryable is False
+    assert "cannot be translated" in raised.value.message
+    _assert_short_message(raised.value)
+
+
+async def test_translated_fetch_times_out_like_the_native_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(fetch_module, "TRANSCRIPT_TIMEOUT_SECONDS", 0.05)
+    patch_api(
+        monkeypatch,
+        FakeApi(list_result=[FakeTrack("English", "en", translatable_to=["de"])], delay=0.3),
+    )
+
+    with pytest.raises(TranscriptError) as raised:
+        await fetch_translated_transcript(VIDEO_ID, "de", ["en"])
+
+    assert raised.value.code is TranscriptErrorCode.UPSTREAM_ERROR
+    assert "timed out" in raised.value.message
+
+
+async def test_translated_transcript_is_cached_forever_under_its_own_key(
+    monkeypatch: pytest.MonkeyPatch, opened_cache: Cache
+) -> None:
+    api = FakeApi(list_result=[FakeTrack("English", "en", translatable_to=["de"])])
+    patch_api(monkeypatch, api)
+
+    first = await fetch_translated_transcript(VIDEO_ID, "de", ["en"], cache=opened_cache)
+    second = await fetch_translated_transcript(VIDEO_ID, "de", ["en"], cache=opened_cache)
+
+    assert first == second
+    assert api.list_calls == [VIDEO_ID]  # one listing, both calls
+    stored = await opened_cache.get("transcript:dQw4w9WgXcQ:en:translated:de")
+    assert stored["is_translated"] is True
+    assert stored["translated_from"] == "en"
+    assert await opened_cache.purge_expired() == 0  # ttl=0: never expires
+
+
+async def test_translated_entry_never_satisfies_a_native_request(
+    monkeypatch: pytest.MonkeyPatch, opened_cache: Cache
+) -> None:
+    """The correctness core: a translated en->de payload must not answer a native `de` call."""
+    translated_api = FakeApi(
+        list_result=[
+            FakeTrack(
+                "English",
+                "en",
+                translatable_to=["de"],
+                translated_snippets=(("hello world", 0.0, 1.0),),
+            )
+        ]
+    )
+    native_api = FakeApi(result=fetched(("hallo welt", 0.0, 1.0), language_code="de"))
+    patch_api(monkeypatch, translated_api, native_api)
+
+    translated = await fetch_translated_transcript(VIDEO_ID, "de", ["en"], cache=opened_cache)
+
+    assert translated.snippets[0].text == "hello world"
+    # Nothing was written into the native `transcript:<id>:<lang>` namespace.
+    assert await opened_cache.get("transcript:dQw4w9WgXcQ:de") is None
+
+    native = await fetch_transcript(VIDEO_ID, languages=["de"], cache=opened_cache)
+
+    assert native_api.fetch_calls == [(VIDEO_ID, ("de",), False)]  # a real fetch happened
+    assert native.snippets[0].text == "hallo welt"
+    assert native.is_translated is False
+    assert native.translated_from is None
+
+
+async def test_native_entry_never_satisfies_a_translated_request(
+    monkeypatch: pytest.MonkeyPatch, opened_cache: Cache
+) -> None:
+    """The other direction: a native `de` entry must not short-circuit a de-translation."""
+    native_api = FakeApi(result=fetched(("hallo welt", 0.0, 1.0), language_code="de"))
+    translated_api = FakeApi(list_result=[FakeTrack("English", "en", translatable_to=["de"])])
+    patch_api(monkeypatch, native_api, translated_api)
+
+    await fetch_transcript(VIDEO_ID, languages=["de"], cache=opened_cache)
+
+    translated = await fetch_translated_transcript(VIDEO_ID, "de", ["en"], cache=opened_cache)
+
+    assert translated_api.list_calls == [VIDEO_ID]  # listed and translated, not read back
+    assert translated.is_translated is True
+    assert translated.translated_from == "en"
+    assert translated.snippets[0].text == "translated"
+    # Both entries coexist under distinct keys.
+    assert await opened_cache.get("transcript:dQw4w9WgXcQ:de") is not None
+    assert await opened_cache.get("transcript:dQw4w9WgXcQ:en:translated:de") is not None
+
+
+async def test_translated_cache_hit_under_a_later_source_language_code(
+    monkeypatch: pytest.MonkeyPatch, opened_cache: Cache
+) -> None:
+    """The source track is always one of the requested codes, so a hit needs no listing."""
+    api = FakeApi(
+        list_result=[
+            FakeTrack("German", "de", translatable_to=["en"]),
+            FakeTrack("English", "en", translatable_to=["de"]),
+        ]
+    )
+    patch_api(monkeypatch, api)
+
+    await fetch_translated_transcript(VIDEO_ID, "en", ["de"], cache=opened_cache)
+    again = await fetch_translated_transcript(VIDEO_ID, "en", ["en", "de"], cache=opened_cache)
+
+    assert again.translated_from == "de"
+    assert api.list_calls == [VIDEO_ID]
 
 
 # --- timeout + offload (section 7.1) ----------------------------------------------------------

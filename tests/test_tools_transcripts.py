@@ -68,6 +68,44 @@ def patch_fetch(
     return calls
 
 
+def patch_translated_fetch(
+    monkeypatch: pytest.MonkeyPatch,
+    transcript: Transcript | None = None,
+    error: Exception | None = None,
+) -> list[dict]:
+    """Replace `fetch_translated_transcript` at the tools boundary; return recorded calls."""
+    calls: list[dict] = []
+
+    async def fake_fetch(video_id: str, translate_to: str, languages=None, *, cache=None):
+        calls.append(
+            {
+                "video_id": video_id,
+                "translate_to": translate_to,
+                "languages": languages,
+                "cache": cache,
+            }
+        )
+        if error is not None:
+            raise error
+        return transcript
+
+    monkeypatch.setattr(tools_transcripts, "fetch_translated_transcript", fake_fetch)
+    return calls
+
+
+def make_translated_transcript(*texts: str) -> Transcript:
+    """A transcript as the translated path returns it: German, machine output from `en`."""
+    return make_transcript(*texts).model_copy(
+        update={
+            "language": "German",
+            "language_code": "de",
+            "is_generated": True,
+            "is_translated": True,
+            "translated_from": "en",
+        }
+    )
+
+
 def patch_tracks(
     monkeypatch: pytest.MonkeyPatch,
     tracks: TranscriptTrackList | None = None,
@@ -397,6 +435,78 @@ async def test_timestamped_transcript_cursor_past_the_end_returns_empty_untrunca
 
 
 # ---------------------------------------------------------------- languages + caching
+
+
+# ------------------------------------------------------------------ translation (F2)
+
+
+async def test_get_transcript_translate_to_uses_the_translated_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    native_calls = patch_fetch(monkeypatch, make_transcript("hi"))
+    translated_calls = patch_translated_fetch(monkeypatch, make_translated_transcript("hallo"))
+    mcp, _ = make_test_server(settings=Settings(_env_file=None, response_limit=100))
+
+    result = await call_tool(
+        mcp, "youtube_get_transcript", {"video_id": VIDEO_ID, "translate_to": "de"}
+    )
+
+    assert result["text"] == "hallo"
+    assert result["language"] == "German"
+    assert result["language_code"] == "de"
+    assert result["is_generated"] is True
+    assert result["is_translated"] is True
+    assert result["translated_from"] == "en"
+    assert native_calls == []  # translate_to never reads the native path
+    assert translated_calls[0]["translate_to"] == "de"
+    assert translated_calls[0]["languages"] == ["en"]  # configured default
+
+
+async def test_get_transcript_without_translate_to_stays_native(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_fetch(monkeypatch, make_transcript("hi"))
+    translated_calls = patch_translated_fetch(monkeypatch, make_translated_transcript("hallo"))
+    mcp, _ = make_test_server(settings=Settings(_env_file=None, response_limit=100))
+
+    result = await call_tool(mcp, "youtube_get_transcript", {"video_id": VIDEO_ID})
+
+    assert result["text"] == "hi"
+    assert result["is_translated"] is False
+    assert result["translated_from"] is None
+    assert translated_calls == []
+
+
+async def test_timestamped_transcript_surfaces_translation_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_translated_fetch(monkeypatch, make_translated_transcript("hallo", "welt"))
+    mcp, _ = make_test_server(settings=Settings(_env_file=None, response_limit=100))
+
+    result = await call_tool(
+        mcp,
+        "youtube_get_timestamped_transcript",
+        {"video_id": VIDEO_ID, "translate_to": "de"},
+    )
+
+    assert [segment["text"] for segment in result["segments"]] == ["hallo", "welt"]
+    assert result["language_code"] == "de"
+    assert result["is_translated"] is True
+    assert result["translated_from"] == "en"
+
+
+async def test_search_in_transcript_offers_no_translate_to(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deliberate: search always reads the native track (translating it would invent matches)."""
+    mcp, _ = make_test_server()
+
+    async with Client(mcp) as client:
+        tools = {tool.name: tool for tool in await client.list_tools()}
+
+    assert "translate_to" not in tools["youtube_search_in_transcript"].input_schema["properties"]
+    for name in ("youtube_get_transcript", "youtube_get_timestamped_transcript"):
+        assert "translate_to" in tools[name].input_schema["properties"]
 
 
 async def test_default_language_comes_from_settings(

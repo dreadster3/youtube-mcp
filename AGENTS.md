@@ -5,7 +5,7 @@ runner is [go-task](https://taskfile.dev) with `Taskfile.yaml` at the root — r
 
 ## Project overview (for future agents)
 
-- **What it is.** A single-process, **stdio-first** MCP server exposing **12 `youtube_*` tools**
+- **What it is.** A single-process, **stdio-first** MCP server exposing **13 `youtube_*` tools**
   over public YouTube data — transcripts (incl. search inside a transcript), video search/metadata/
   stats, top-level comments, channel + uploads-playlist listing, categories — for any local agent.
   HTTP is optional and adds `/health`. Import package `youtube_mcp`; dist `dreadster3-youtube-mcp`
