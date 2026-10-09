@@ -1,0 +1,15 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "The request is not properly authorized to access this playlist.",
+        "domain": "youtube.playlist",
+        "reason": "playlistForbidden",
+        "locationType": "parameter",
+        "location": "playlistId"
+      }
+    ],
+    "code": 403,
+    "message": "The request is not properly authorized to access this playlist."
+  }
+}

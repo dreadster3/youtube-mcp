@@ -1,6 +1,7 @@
-"""Data API tools (section 8): search, videos, stats, comments, replies, channel, categories.
+"""Data API tools (section 8): search, videos, stats, comments, replies, channel, channel videos,
+playlists, playlist items, categories.
 
-Eight tools over the Batch-2 client. This module owns the things the client deliberately does
+Ten tools over the Batch-2 client. This module owns the things the client deliberately does
 not: the uploads-playlist walk, the stats cache (TTL from `CACHE_TTL_SECONDS`, section 12), and the
 model-facing wording of quota cost. Descriptions are load-bearing — they are the LLM's only
 documentation (section 8), so each one states its bucket where a bucket applies (section 5.3),
@@ -134,6 +135,14 @@ class ChannelVideoPage(BaseModel):
     next_page_token: str | None = None
 
 
+class PlaylistItemsPage(BaseModel):
+    """A page of one playlist's items, in playlist order. `playlist_id` is echoed back."""
+
+    playlist_id: str
+    items: list[models.PlaylistItem] = Field(default_factory=list)
+    next_page_token: str | None = None
+
+
 class CategoriesPage(BaseModel):
     """YouTube's video categories for one region."""
 
@@ -244,38 +253,44 @@ async def _uploads_playlist_id(deps: Deps, channel_id: str) -> str:
     return channel.uploads_playlist_id
 
 
-async def _channel_page(
-    deps: Deps, playlist_id: str, *, max_results: int
+async def _playlist_item_walk(
+    deps: Deps,
+    playlist_id: str,
+    *,
+    max_results: int,
+    page_token: str | None = None,
 ) -> tuple[list[models.PlaylistItem], str | None]:
     """Walk `playlistItems` up to `max_results`, one shared-pool unit per page.
 
-    Stops as soon as it has enough, so a request for 5 videos never pays for a full page of
-    50 (`iterate_pages` is lazy).
+    Shared by the uploads walk and the playlist-items tool, which differ only in where the
+    playlist ID comes from and whether the caller supplies a starting token. Stops as soon as
+    it has enough, so a request for 5 items never pays for a full page of 50 (`iterate_pages`
+    is lazy). `page_token` resumes at YouTube's own opaque token.
     """
     collected: list[models.PlaylistItem] = []
     next_page_token: str | None = None
     remaining = max_results
 
-    async def fetch_page(page_token: str | None) -> models.PlaylistItemPage:
+    async def fetch_page(token: str | None) -> models.PlaylistItemPage:
         return await deps.client.list_playlist_items(
             playlist_id,
             max_results=min(PLAYLIST_PAGE_SIZE, remaining),
-            page_token=page_token,
+            page_token=token,
         )
 
-    async for page in iterate_pages(fetch_page):
+    async for page in iterate_pages(fetch_page, start_token=page_token):
         collected.extend(page.items)
         next_page_token = page.next_page_token
         remaining = max_results - len(collected)
         # Stop the walk the moment we have enough: `iterate_pages` is lazy, so breaking here
-        # is what keeps a request for 5 videos from paying for a second page.
+        # is what keeps a request for 5 items from paying for a second page.
         if remaining <= 0 or not next_page_token:
             break
     return collected[:max_results], next_page_token
 
 
 def register(mcp: FastMCP, deps: Deps) -> None:
-    """Register the eight Data API tools on `mcp`."""
+    """Register the ten Data API tools on `mcp`."""
 
     @mcp.tool
     @as_tool_error
@@ -523,13 +538,85 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         handle). Each item has the video ID, title, description and when it was added to the
         playlist; it carries no view counts — get those from `youtube_get_video_stats` (its own
         bucket). The walk stops as soon as `max_results` is reached, so ask for what you need;
-        `next_page_token` continues from there.
+        `next_page_token` continues from there. For a playlist that is not a channel's uploads,
+        or one you already have the playlist ID for, use `youtube_list_playlist_items`.
         """
         playlist_id = await _uploads_playlist_id(deps, channel_id)
-        items, next_page_token = await _channel_page(deps, playlist_id, max_results=max_results)
+        items, next_page_token = await _playlist_item_walk(
+            deps, playlist_id, max_results=max_results
+        )
         return ChannelVideoPage(
             channel_id=channel_id,
             uploads_playlist_id=playlist_id,
+            items=items,
+            next_page_token=next_page_token,
+        )
+
+    @mcp.tool
+    @as_tool_error
+    async def youtube_get_playlist(playlist_id: str) -> models.PlaylistInfo:
+        """Get one playlist's own metadata by ID — title, description, channel, size, visibility.
+
+        Returns `title`, `description`, the owning channel (`channel_id`, `channel_title`),
+        `item_count` (the number YouTube reports for the playlist), `published_at` (when the
+        *playlist* was created, not when its videos were) and `privacy_status`
+        (`public` / `unlisted` / `private`). For the videos in it, use
+        `youtube_list_playlist_items`.
+
+        Costs one unit from the **shared** 10,000-unit pool. **Requires the playlist ID — there
+        is no lookup by name.** Discovery is deliberately not offered: the only endpoint that
+        could search for playlists is `search.list`, and its bucket is 100 calls/day (see
+        `youtube_search_videos`). Get IDs from a channel via `youtube_get_channel`
+        (`uploads_playlist_id`), from a video's page, or from the user.
+
+        A playlist that does not exist and one that is private fail with **different** errors,
+        and neither is worth retrying: a private playlist stays private with an API key. An
+        `item_count` of 0 is a real, empty playlist, not a failure.
+        """
+        # `status` is requested on top of the client's default parts: it is where
+        # `privacyStatus` lives, and it costs nothing extra (a part is response size, not quota).
+        playlist = await deps.client.list_playlist(
+            playlist_id, parts=("snippet", "contentDetails", "status")
+        )
+        if playlist is None:
+            raise ToolError(
+                f"youtube_get_playlist: no playlist found for id {playlist_id!r} — check the "
+                "ID; this endpoint does not look up playlists by name"
+            )
+        return playlist
+
+    @mcp.tool
+    @as_tool_error
+    async def youtube_list_playlist_items(
+        playlist_id: str,
+        max_results: Annotated[int, Field(ge=1, le=50)] = 50,
+        page_token: str | None = None,
+    ) -> PlaylistItemsPage:
+        """List the videos in *any* playlist, in playlist order — one shared-pool unit per page.
+
+        Unlike `youtube_list_channel_videos` this needs no channel: give it the playlist ID
+        (from `youtube_get_channel`'s `uploads_playlist_id`, `youtube_get_playlist`, a video's
+        page, or the user) and it walks that playlist. Each item carries `video_id`, `title`,
+        `channel_title`, its `position` in the playlist, and `published_at`, which is **when the
+        video was added to this playlist** — a playlist keeps its own order and its own
+        add-dates, so these are *not* the videos' publish dates.
+
+        Costs one unit from the **shared** 10,000-unit pool per page, the large pool — never the
+        scarce 100/day `search.list` bucket, which this tool does not touch. Items carry no
+        view counts; get those from `youtube_get_video_stats` (its own bucket).
+
+        `page_token` is YouTube's **opaque** `nextPageToken`, handed straight back exactly as
+        received — never a page number or an offset, and never the integer character cursor from
+        `youtube_get_transcript` (a different mechanism entirely). An empty playlist returns
+        `items: []` with no error: that is the real answer, not a failure. A private playlist
+        fails with an error that says so and is distinct from "does not exist"; retrying helps
+        neither.
+        """
+        items, next_page_token = await _playlist_item_walk(
+            deps, playlist_id, max_results=max_results, page_token=page_token
+        )
+        return PlaylistItemsPage(
+            playlist_id=playlist_id,
             items=items,
             next_page_token=next_page_token,
         )

@@ -18,6 +18,7 @@ from youtube_mcp.youtube.client import (
     CommentsDisabledError,
     InvalidRequestError,
     NotFoundError,
+    PlaylistForbiddenError,
     QuotaExceededError,
     RateLimitedError,
     UpstreamError,
@@ -29,6 +30,7 @@ from youtube_mcp.youtube.models import (
     BatchStatsResponse,
     Channel,
     CommentThreadPage,
+    PlaylistInfo,
     PlaylistItemPage,
     SearchResults,
 )
@@ -315,6 +317,53 @@ async def test_list_channel_rejects_empty_selector_before_spending_quota(kwargs)
     assert client.quota.remaining(QuotaBucket.SHARED) == 10_000
 
 
+async def test_list_playlist_params_and_single_unit():
+    handler = Recorder(ok(fixture("playlists_list.json")))
+    client = make_client(handler)
+
+    playlist = await client.list_playlist("PLx7I4zH7kz2Q4tU9mB0pX8aLw1Q")
+
+    assert isinstance(playlist, PlaylistInfo)
+    assert handler.path() == "/youtube/v3/playlists"
+    params = handler.params()
+    assert params["part"] == "snippet,contentDetails"
+    assert params["id"] == "PLx7I4zH7kz2Q4tU9mB0pX8aLw1Q"
+    assert client.quota.remaining(QuotaBucket.SHARED) == 9_999
+
+
+async def test_list_playlist_returns_none_when_youtube_has_no_item():
+    """A defensive empty body lands here too, exactly like `list_channel`."""
+    handler = Recorder(ok({"items": []}))
+    client = make_client(handler)
+
+    assert await client.list_playlist("PLmissing") is None
+
+
+async def test_list_playlist_rejects_an_empty_id_before_spending_quota():
+    handler = Recorder()
+    client = make_client(handler)
+
+    with pytest.raises(InvalidRequestError, match="must not be empty"):
+        await client.list_playlist("")
+
+    assert handler.attempts == 0
+    assert client.quota.remaining(QuotaBucket.SHARED) == 10_000
+
+
+async def test_playlist_forbidden_is_non_retryable_and_is_not_a_not_found():
+    """Private must stay distinguishable from missing, and neither may be retried."""
+    handler = Recorder(err(fixture("playlist_forbidden_403.json"), 403))
+    client = make_client(handler, max_attempts=3)
+
+    with pytest.raises(PlaylistForbiddenError) as raised:
+        await client.list_playlist("PLprivate")
+
+    assert raised.value.retryable is False
+    assert raised.value.code == "PLAYLIST_FORBIDDEN"
+    assert raised.value.code != NotFoundError.code
+    assert handler.attempts == 1  # no backoff, no second attempt
+
+
 async def test_list_playlist_items_params():
     handler = Recorder(ok(fixture("playlist_items.json")))
     client = make_client(handler)
@@ -513,6 +562,8 @@ async def test_quota_counter_uses_injected_clock():
         ("user_rate_limit_exceeded_403.json", 403, RateLimitedError),
         ("comments_disabled_403.json", 403, CommentsDisabledError),
         ("comment_not_found_404.json", 404, NotFoundError),
+        ("playlist_forbidden_403.json", 403, PlaylistForbiddenError),
+        ("playlist_operation_unsupported_403.json", 403, InvalidRequestError),
         ("channel_not_found_404.json", 404, NotFoundError),
         ("playlist_not_found_404.json", 404, NotFoundError),
         ("video_not_found_404.json", 404, NotFoundError),
@@ -818,6 +869,22 @@ async def test_iterate_pages_walks_tokens_and_stops():
     assert seen == ["CAEQAA", None]
     assert handler.attempts == 2
     assert client.quota.remaining(QuotaBucket.SHARED) == 9_998
+
+
+async def test_iterate_pages_resumes_from_a_given_start_token():
+    """A tool that handed out a `next_page_token` resumes there, not from page one."""
+    handler = Recorder(ok(fixture("playlist_items.json")), ok({"items": []}))
+    client = make_client(handler)
+    pages = 0
+
+    async for _ in iterate_pages(
+        lambda token: client.list_playlist_items("PL1", page_token=token), start_token="CAEQAA"
+    ):
+        pages += 1
+
+    assert pages == 2
+    assert handler.params(0)["pageToken"] == "CAEQAA"  # resumed, not restarted
+    assert handler.params(1)["pageToken"] == "CAEQAA"  # the fixture's own next token
 
 
 async def test_iterate_pages_is_lazy_so_tools_can_stop_early():

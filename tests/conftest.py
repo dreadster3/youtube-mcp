@@ -89,6 +89,11 @@ class StubYouTubeClient:
     async def list_channel(self, **kwargs: Any) -> Any:
         return await self._respond("list_channel", kwargs)
 
+    async def list_playlist(self, playlist_id: str, parts: Any = ()) -> Any:
+        return await self._respond(
+            "list_playlist", {"playlist_id": playlist_id, "parts": list(parts)}
+        )
+
     async def list_playlist_items(self, playlist_id: str, **kwargs: Any) -> Any:
         return await self._respond("list_playlist_items", {"playlist_id": playlist_id, **kwargs})
 
@@ -108,7 +113,7 @@ def make_test_server(
     cache: Any = None,
     **responses: Any,
 ) -> tuple[FastMCP, StubYouTubeClient]:
-    """A `FastMCP` with all 13 tools registered over a stub client (no ASGI app, no sockets).
+    """A `FastMCP` with all 15 tools registered over a stub client (no ASGI app, no sockets).
 
     `cache` defaults to `None`, which is also a real code path: every tool has to work when
     the cache is absent.

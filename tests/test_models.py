@@ -17,6 +17,7 @@ from youtube_mcp.youtube.models import (
     Channel,
     CommentReplyPage,
     CommentThreadPage,
+    PlaylistInfo,
     PlaylistItemPage,
     SearchResults,
     Video,
@@ -109,6 +110,34 @@ def test_channel_tolerates_empty_statistics():
     assert channel.uploads_playlist_id is None
 
 
+def test_playlist_info_shape():
+    playlist = PlaylistInfo.from_api(fixture("playlists_list.json")["items"][0])
+
+    assert playlist.playlist_id == "PLx7I4zH7kz2Q4tU9mB0pX8aLw1Q"
+    assert playlist.title == "Android at Google I/O"
+    assert playlist.channel_id == "UCBR8-60-B28hp2BmDPdntcQ"
+    assert playlist.channel_title == "Google Developers"
+    assert playlist.item_count == 120  # JSON body, but counts arrive as strings too
+    assert playlist.privacy_status == "public"
+    assert playlist.published_at == datetime(2021, 3, 15, 9, 12, tzinfo=UTC)
+
+
+def test_playlist_info_tolerates_missing_parts():
+    """Default parts are snippet+contentDetails, so `status` and its `privacyStatus` may be gone."""
+    playlist = PlaylistInfo.from_api({"id": "PL1", "snippet": {"title": "t"}})
+
+    assert playlist.playlist_id == "PL1"
+    assert playlist.privacy_status is None
+    assert playlist.item_count is None
+    assert playlist.published_at is None
+
+
+def test_playlist_info_reads_string_encoded_item_count():
+    playlist = PlaylistInfo.from_api({"id": "PL1", "contentDetails": {"itemCount": "120"}})
+
+    assert playlist.item_count == 120
+
+
 def test_playlist_item_distinguishes_item_id_from_video_id():
     page = PlaylistItemPage.from_api(fixture("playlist_items.json"))
 
@@ -118,6 +147,7 @@ def test_playlist_item_distinguishes_item_id_from_video_id():
     assert item.video_id == "dQw4w9WgXcQ"  # from snippet.resourceId.videoId
     assert item.item_id != item.video_id
     assert item.position == 0
+    # `published_at` is the playlist add-time; the video's own publish time is a different field.
     assert item.video_published_at == datetime(2024, 4, 30, 16, 0, tzinfo=UTC)
     assert item.published_at == datetime(2024, 5, 1, 12, 34, 56, tzinfo=UTC)
 
@@ -320,6 +350,7 @@ def test_items_skips_non_mapping_entries():
     [
         SearchResults,
         Channel,
+        PlaylistInfo,
         PlaylistItemPage,
         Video,
         VideoStats,

@@ -1,0 +1,15 @@
+{
+  "error": {
+    "errors": [
+      {
+        "message": "The API does not support the ability to list videos in the specified playlist.",
+        "domain": "youtube.playlist",
+        "reason": "playlistOperationUnsupported",
+        "locationType": "parameter",
+        "location": "playlistId"
+      }
+    ],
+    "code": 403,
+    "message": "The API does not support the ability to list videos in the specified playlist."
+  }
+}

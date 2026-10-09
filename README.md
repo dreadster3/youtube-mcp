@@ -9,7 +9,7 @@ no account** — just a YouTube Data API key.
 One Python process: FastMCP server, YouTube Data API client, transcript fetching and cache all live
 in the same application. No sidecar, no second service, no Redis.
 
-- **13 tools**, all namespaced `youtube_*`, read-only public data.
+- **15 tools**, all namespaced `youtube_*`, read-only public data.
 - **stdio by default.** HTTP is available for a shared/deployed instance — see
   [Optional: HTTP mode / container](#optional-http-mode--container).
 - **API-key only.** No OAuth, no uploads, no channel management.
@@ -93,6 +93,8 @@ transcripts are.
 | `youtube_get_comment_replies` | Every reply to one top-level comment, pageable (`comments.list?parentId`) | shared (10,000/day) |
 | `youtube_get_channel` | Channel by ID or `@handle`, plus its uploads playlist ID | shared (10,000/day) |
 | `youtube_list_channel_videos` | Channel uploads, newest first, via the uploads playlist | shared (10,000/day) |
+| `youtube_get_playlist` | Playlist metadata by ID — title, description, channel, item count, visibility | shared (10,000/day) |
+| `youtube_list_playlist_items` | Videos in any playlist, in playlist order, opaque-token pageable | shared (10,000/day) |
 | `youtube_list_categories` | Video categories, optionally per region | shared (10,000/day) |
 | `youtube_get_quota_status` | Used/remaining per bucket for today, plus the reset time | none (reads the local counter) |
 
@@ -120,6 +122,19 @@ Notes that the tool descriptions also carry, because the model is the main consu
   `quotaExceeded`. Like that counter it is **approximate and process-local**: it counts only this
   process, resets to zero on restart, and knows nothing about another process using the same key, so
   Google can still refuse a call this tool reports as affordable.
+- **Playlists are ID-only, by design.** `youtube_get_playlist` and `youtube_list_playlist_items`
+  take a playlist ID; there is no lookup by name, because the only endpoint that could discover
+  playlists is `search.list` (100 calls/day). IDs come from `youtube_get_channel`
+  (`uploads_playlist_id`), the user, or a video's page.
+- **Playlist items are in playlist order, and `published_at` is the add-date.** A playlist keeps
+  its own order and its own add-dates, so that field is when the video was added to *that
+  playlist* — never claim it as the video's publish date. Paging uses YouTube's opaque
+  `nextPageToken`, which is a different mechanism from the transcript tools' integer `next_cursor`.
+  An empty playlist returns `items: []` — a real answer, not an error.
+- **A private playlist is not a missing one.** `403 playlistForbidden` maps to its own message so
+  "private" stays distinguishable from "does not exist"; neither is worth retrying. Playlist types
+  the API refuses to list at all (Watch History, Liked videos) are reported as a bad request
+  (`playlistOperationUnsupported`), not as an upstream failure.
 - Transcripts are truncated at `RESPONSE_LIMIT` by cumulative characters (both variants) and return
   `next_cursor`; an uncapped 3-hour transcript would blow the model's context window.
 - **`translate_to` returns YouTube's machine translation, not the creator's words.** It is a
@@ -142,7 +157,7 @@ Three buckets, because Google counts them separately:
 | --- | --- | --- |
 | `search` | 100 calls/day | `search.list`, one unit per call — **including each additional page** |
 | `stats` | 10,000 calls/day | `videos:batchGetStats` only |
-| `shared` | 10,000 units/day | `videos.list`, `channels.list`, `playlistItems.list`, `commentThreads.list`, `comments.list`, `videoCategories.list` |
+| `shared` | 10,000 units/day | `videos.list`, `channels.list`, `playlists.list`, `playlistItems.list`, `commentThreads.list`, `comments.list`, `videoCategories.list` |
 
 - Quotas reset at **midnight Pacific Time** (`America/Los_Angeles`, DST-aware). Not midnight UTC, not
   midnight local. A `403 quotaExceeded` means done for the day — the error message says "resets
@@ -292,7 +307,7 @@ Then, with an MCP client pointed at `http://localhost:8088/mcp` (the MCP Inspect
 way), or straight from the CLI:
 
 ```bash
-uv run fastmcp list http://localhost:8088/mcp --transport http   # should list all 13 tools
+uv run fastmcp list http://localhost:8088/mcp --transport http   # should list all 15 tools
 ```
 
 For stdio, the same call is `uv run fastmcp list --command "env YOUTUBE_API_KEY=$YOUTUBE_API_KEY uv run youtube-mcp"`,
