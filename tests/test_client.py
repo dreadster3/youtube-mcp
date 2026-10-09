@@ -382,6 +382,17 @@ async def test_list_playlist_items_params():
     assert page.next_page_token == "CAEQAA"
 
 
+async def test_list_playlist_items_rejects_an_empty_id_before_spending_quota():
+    handler = Recorder()
+    client = make_client(handler)
+
+    with pytest.raises(InvalidRequestError, match="must not be empty"):
+        await client.list_playlist_items("")
+
+    assert handler.attempts == 0
+    assert client.quota.remaining(QuotaBucket.SHARED) == 10_000
+
+
 async def test_list_comment_threads_params():
     handler = Recorder(ok(fixture("comment_threads.json")))
     client = make_client(handler)

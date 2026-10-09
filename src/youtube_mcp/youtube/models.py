@@ -251,7 +251,8 @@ class PlaylistItem(BaseModel):
 
     `published_at` is when the video was **added to this playlist** — a playlist keeps its
     own order and its own add-dates, so it says nothing about when the video itself was
-    published to YouTube (`video_published_at`, absent unless `contentDetails` was sent).
+    published to YouTube (`video_published_at` arrives implicitly with `snippet` when YouTube
+    includes it; treat as best-effort).
     """
 
     item_id: str

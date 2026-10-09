@@ -564,6 +564,8 @@ class YouTubeClient:
         page_token: str | None = None,
     ) -> models.PlaylistItemPage:
         """`playlistItems.list` — shared pool, 1 unit per page. No `contentDetails` part."""
+        if not playlist_id:
+            raise InvalidRequestError("list_playlist_items: playlist_id must not be empty")
         _check_range("max_results", max_results, 0, MAX_PLAYLIST_RESULTS)
         self._quota.consume(QuotaBucket.SHARED)
         raw = await self._get(
