@@ -76,7 +76,7 @@ def resources(settings: Settings) -> ServerResources:
 # ------------------------------------------------------------------------ tool surface
 
 
-async def test_tools_list_exposes_exactly_the_twelve_namespaced_tools(
+async def test_tools_list_exposes_exactly_the_thirteen_namespaced_tools(
     settings: Settings, resources: ServerResources
 ) -> None:
     mcp = build_mcp(settings, resources)
@@ -117,6 +117,9 @@ async def test_every_tool_has_a_substantive_description(
         ("youtube_get_comment_replies", "full"),
         ("youtube_list_channel_videos", "shared"),
         ("youtube_list_categories", "shared"),
+        ("youtube_get_transcript", "no YouTube Data API quota"),
+        ("youtube_get_transcript", "machine translation"),
+        ("youtube_get_timestamped_transcript", "machine translation"),
     ],
 )
 async def test_quota_and_limitation_wording_is_present_in_descriptions(

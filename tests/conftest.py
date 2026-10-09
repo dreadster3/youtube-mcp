@@ -108,7 +108,7 @@ def make_test_server(
     cache: Any = None,
     **responses: Any,
 ) -> tuple[FastMCP, StubYouTubeClient]:
-    """A `FastMCP` with all 12 tools registered over a stub client (no ASGI app, no sockets).
+    """A `FastMCP` with all 13 tools registered over a stub client (no ASGI app, no sockets).
 
     `cache` defaults to `None`, which is also a real code path: every tool has to work when
     the cache is absent.

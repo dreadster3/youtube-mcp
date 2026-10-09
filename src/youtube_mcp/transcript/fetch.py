@@ -23,9 +23,11 @@ from youtube_transcript_api import (
     InvalidVideoId,
     IpBlocked,
     NoTranscriptFound,
+    NotTranslatable,
     PoTokenRequired,
     RequestBlocked,
     TranscriptsDisabled,
+    TranslationLanguageNotAvailable,
     VideoUnavailable,
     VideoUnplayable,
     YouTubeDataUnparsable,
@@ -69,12 +71,20 @@ class TranscriptSnippet(BaseModel):
 
 
 class Transcript(BaseModel):
-    """A fetched transcript, entire. Tools slice it for RESPONSE_LIMIT/cursor handling."""
+    """A fetched transcript, entire. Tools slice it for RESPONSE_LIMIT/cursor handling.
+
+    `is_translated` and `translated_from` are provenance for a translated fetch: the text is
+    YouTube's machine translation of `translated_from`, never the creator's own words.
+    `translated_from` is the language code of the track that was read, and is `None` on the
+    native path and when the requested translation target already is that track's language.
+    """
 
     video_id: str
     language: str
     language_code: str
     is_generated: bool
+    is_translated: bool = False
+    translated_from: str | None = None
     snippets: list[TranscriptSnippet]
 
 
@@ -149,6 +159,17 @@ _ERROR_TABLE: tuple[tuple[type[Exception], TranscriptErrorCode, str], ...] = (
         IpBlocked,
         TranscriptErrorCode.IP_BLOCKED,
         "YouTube blocked this IP — transient, retry later or configure a proxy",
+    ),
+    (
+        NotTranslatable,
+        TranscriptErrorCode.INVALID_REQUEST,
+        "this track cannot be translated",
+    ),
+    (
+        TranslationLanguageNotAvailable,
+        TranscriptErrorCode.INVALID_REQUEST,
+        "no translation to that language; use youtube_list_transcript_languages to see valid "
+        "targets; retrying will not help",
     ),
     (
         RequestBlocked,
@@ -233,6 +254,19 @@ def _transcript_key(video_id: str, language_code: str, *, styled: bool) -> str:
     return namespaced("transcript", video_id, language_code)
 
 
+def _translated_key(video_id: str, source_code: str, target: str) -> str:
+    """Cache key for one translated transcript.
+
+    Namespaced away from `_transcript_key` in *both* directions: a translated en->de payload
+    stored under the native `transcript:<video_id>:de` key would silently satisfy a later
+    request for the video's own German track (and a native entry would short-circuit a
+    translation request), so source and target are both part of the key and the `translated`
+    segment keeps the two families apart. No `styled` variant here: `preserve_formatting` is
+    not plumbed into the translated path.
+    """
+    return namespaced("transcript", video_id, source_code, "translated", target)
+
+
 def _api() -> YouTubeTranscriptApi:
     """A fresh client per call: each instance owns a `requests.Session` and is not thread-safe."""
     return YouTubeTranscriptApi(proxy_config=build_proxy_config(get_settings()))
@@ -281,6 +315,36 @@ def _fetch_sync(video_id: str, languages: tuple[str, ...], preserve_formatting: 
         language=fetched.language,
         language_code=fetched.language_code,
         is_generated=fetched.is_generated,
+        snippets=[
+            TranscriptSnippet(text=snippet.text, start=snippet.start, duration=snippet.duration)
+            for snippet in fetched
+        ],
+    )
+
+
+def _fetch_translated_sync(video_id: str, source_codes: tuple[str, ...], target: str) -> Transcript:
+    """Blocking library call: pick a source track and fetch YouTube's translation of it.
+
+    `find_transcript` prefers a manually created track over a generated one over `source_codes`.
+    No `is_translatable` pre-check: `translate()` raises `NotTranslatable` itself and the
+    mapping in `_ERROR_TABLE` already turns that into a clear, non-retryable INVALID_REQUEST.
+    """
+    track = _api().list(video_id).find_transcript(source_codes)
+    source_code = track.language_code
+    fetched = track.translate(target).fetch()
+    # `translate()` hard-codes `is_generated=True` on the track it returns, so a translation of
+    # an uploaded (manual) track still reads as generated — which is right: YouTube's
+    # translation is machine output, whatever the source track was.
+    translated = fetched.language_code != source_code
+    return Transcript(
+        video_id=fetched.video_id,
+        language=fetched.language,
+        language_code=fetched.language_code,
+        is_generated=fetched.is_generated,
+        # Asking for the track's own language still goes through the translation endpoint, but
+        # the text is then the track's own words, so it is not reported as a translation.
+        is_translated=translated,
+        translated_from=source_code if translated else None,
         snippets=[
             TranscriptSnippet(text=snippet.text, start=snippet.start, duration=snippet.duration)
             for snippet in fetched
@@ -342,6 +406,53 @@ async def fetch_transcript(
     if cache is not None:
         await cache.set(
             _transcript_key(video_id, transcript.language_code, styled=preserve_formatting),
+            transcript.model_dump(),
+            ttl=0,
+        )
+    return transcript
+
+
+async def fetch_translated_transcript(
+    video_id: str,
+    translate_to: str,
+    languages: Sequence[str] | None = None,
+    *,
+    cache: Cache | None = None,
+) -> Transcript:
+    """Fetch a video's transcript and have YouTube translate it into `translate_to`.
+
+    Separate from `fetch_transcript` because the source track has to be listed first, and
+    because a translated payload must never be served to a native request: it is cached
+    forever under `transcript:<video_id>:<source_code>:translated:<target>`, a key no native
+    lookup reads. `languages` picks the source track (same preference order as the native
+    path); `translate_to` is a language code from `youtube_list_transcript_languages`, and is
+    never a Data API call.
+
+    Raises `TranscriptError` for every failure mode, including a source track with no
+    translation languages and a target the source cannot be translated into — both
+    `INVALID_REQUEST`, not retryable.
+    """
+    _validate_video_id(video_id)
+    codes = tuple(languages) if languages else (get_settings().youtube_transcript_lang,)
+
+    if cache is not None:
+        # `find_transcript` only ever picks from `codes`, so every possible source code is known
+        # up front and a cache hit needs no track listing.
+        for code in codes:
+            cached = await cache.get(_translated_key(video_id, code, translate_to))
+            if cached is not None:
+                return Transcript.model_validate(cached)
+
+    transcript = await _offloaded(
+        lambda: _fetch_translated_sync(video_id, codes, translate_to),
+        video_id=video_id,
+        what="translated transcript fetch",
+    )
+    if cache is not None:
+        await cache.set(
+            _translated_key(
+                video_id, transcript.translated_from or transcript.language_code, translate_to
+            ),
             transcript.model_dump(),
             ttl=0,
         )

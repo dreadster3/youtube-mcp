@@ -9,7 +9,7 @@ no account** — just a YouTube Data API key.
 One Python process: FastMCP server, YouTube Data API client, transcript fetching and cache all live
 in the same application. No sidecar, no second service, no Redis.
 
-- **12 tools**, all namespaced `youtube_*`, read-only public data.
+- **13 tools**, all namespaced `youtube_*`, read-only public data.
 - **stdio by default.** HTTP is available for a shared/deployed instance — see
   [Optional: HTTP mode / container](#optional-http-mode--container).
 - **API-key only.** No OAuth, no uploads, no channel management.
@@ -82,7 +82,7 @@ transcripts are.
 
 | Tool | What it does | Quota bucket |
 | --- | --- | --- |
-| `youtube_get_transcript` | Caption text for one video; timestamps off by default | none (scrape, not Data API) |
+| `youtube_get_transcript` | Caption text for one video; timestamps off by default, `translate_to` for YouTube's translation | none (scrape, not Data API) |
 | `youtube_get_timestamped_transcript` | Same, as `{text, start, duration}` segments for chaptering/deep links | none |
 | `youtube_list_transcript_languages` | Caption tracks available for a video, and whether each is auto-generated | none |
 | `youtube_search_in_transcript` | Case-insensitive substring search inside a transcript, server-side | none |
@@ -122,6 +122,15 @@ Notes that the tool descriptions also carry, because the model is the main consu
   Google can still refuse a call this tool reports as affordable.
 - Transcripts are truncated at `RESPONSE_LIMIT` by cumulative characters (both variants) and return
   `next_cursor`; an uncapped 3-hour transcript would blow the model's context window.
+- **`translate_to` returns YouTube's machine translation, not the creator's words.** It is a
+  parameter on the same internal caption endpoint (still no Data API quota), so it can read a video
+  whose captions are in another language — pick the target from `youtube_list_transcript_languages`
+  (`translatable_to`). `is_translated` is true only when the text differs in language from the track
+  it came from, `translated_from` carries that track's language code, and `is_generated` is always
+  true for a translation (YouTube's translation is machine output even off an uploaded track).
+  A target the track cannot produce is `INVALID_REQUEST` — check the listing, do not retry. Only
+  `youtube_get_transcript` and `youtube_get_timestamped_transcript` offer it: searching a translation
+  would return matches that are not in the video's own words.
 
 ---
 
@@ -193,6 +202,7 @@ SQLite via `aiosqlite` — one file, no extra service. Redis is not worth a tena
 | Cached | Key | TTL |
 | --- | --- | --- |
 | Transcripts | `transcript:<video_id>:<lang>` (and `…:styled`) | forever — a published transcript does not change |
+| Translated transcripts | `transcript:<video_id>:<source_lang>:translated:<target_lang>` | forever — kept apart from the native keys so a translation never answers an untranslated request |
 | Transcript track lists | `transcript_tracks:<video_id>` | forever |
 | Channel → uploads playlist | `uploads_playlist:<channel_id>` | forever — it never changes |
 | Video stats | `video_stats:<video_id>` | `CACHE_TTL_SECONDS` (default 3600s; `0` = never expires) — view counts move |
@@ -282,7 +292,7 @@ Then, with an MCP client pointed at `http://localhost:8088/mcp` (the MCP Inspect
 way), or straight from the CLI:
 
 ```bash
-uv run fastmcp list http://localhost:8088/mcp --transport http   # should list all 12 tools
+uv run fastmcp list http://localhost:8088/mcp --transport http   # should list all 13 tools
 ```
 
 For stdio, the same call is `uv run fastmcp list --command "env YOUTUBE_API_KEY=$YOUTUBE_API_KEY uv run youtube-mcp"`,
