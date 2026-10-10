@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.0](https://github.com/dreadster3/youtube-mcp/compare/v0.2.0...v0.3.0) (2026-10-10)
+
+
+### Features
+
+* **tools:** add local quota status tool ([#27](https://github.com/dreadster3/youtube-mcp/issues/27)) ([388a469](https://github.com/dreadster3/youtube-mcp/commit/388a469d1abf77dfa1f95d0c658b3387a9dcfff4))
+* **tools:** add playlist metadata and playlist item tools ([#26](https://github.com/dreadster3/youtube-mcp/issues/26)) ([dc18c3b](https://github.com/dreadster3/youtube-mcp/commit/dc18c3b5031bce28d82120ed3fc4180b644dee6b))
+* **tools:** surface comment replies and reply counts ([#24](https://github.com/dreadster3/youtube-mcp/issues/24)) ([d986720](https://github.com/dreadster3/youtube-mcp/commit/d986720a44cb4f2757b19cc47ff7402bae8da384))
+* **transcript:** add translate_to to the transcript tools ([#25](https://github.com/dreadster3/youtube-mcp/issues/25)) ([11a41b7](https://github.com/dreadster3/youtube-mcp/commit/11a41b7b8367495d5d8d5b17d996e4cac69dad56))
+
 ## [0.2.0](https://github.com/dreadster3/youtube-mcp/compare/v0.1.0...v0.2.0) (2026-10-05)
 
 
