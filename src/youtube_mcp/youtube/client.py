@@ -119,6 +119,17 @@ class CommentsDisabledError(YouTubeApiError):
     code = "COMMENTS_DISABLED"
 
 
+class PlaylistForbiddenError(YouTubeApiError):
+    """403 `playlistForbidden` — the playlist is not readable with this key (private).
+
+    A separate class from `NotFoundError` on purpose: "you may not read this" and "there is
+    nothing here" call for different behaviour, and an ID that exists but is private must not
+    read as a typo. Both are non-retriable.
+    """
+
+    code = "PLAYLIST_FORBIDDEN"
+
+
 class InvalidRequestError(YouTubeApiError):
     """400-class bad parameters (`invalidPageToken`, `unknownPart`, `invalidPart`, …)."""
 
@@ -172,6 +183,10 @@ _INVALID_REQUEST_REASONS = frozenset(
         "invalid_channel_id",
         "unsupportedRegionCode",
         "unsupportedLanguageCode",
+        # Playlist types the API refuses to list at all (Watch History, Liked videos): a bad
+        # *request* for this endpoint, not a server problem, so it must not fall through to
+        # `UpstreamError` and read as retriable.
+        "playlistOperationUnsupported",
     }
 )
 
@@ -221,6 +236,8 @@ def translate_error(response: httpx.Response, *, method: str) -> YouTubeApiError
         return RateLimitedError(**kwargs)
     if reason == "commentsDisabled":
         return CommentsDisabledError(**kwargs)
+    if reason == "playlistForbidden":
+        return PlaylistForbiddenError(**kwargs)
     if reason in _NOT_FOUND_REASONS:
         return NotFoundError(**kwargs)
     if reason in _INVALID_REQUEST_REASONS:
@@ -249,13 +266,18 @@ class Paged(Protocol):
 
 async def iterate_pages[PageT: Paged](
     fetch_page: Callable[[str | None], Awaitable[PageT]],
+    start_token: str | None = None,
 ) -> AsyncIterator[PageT]:
     """Walk a paged method: `fetch_page` takes a page token and returns one page.
+
+    Starts at the first page unless `start_token` is given, in which case it resumes at that
+    opaque API token — a tool that hands the caller a `next_page_token` passes it back here
+    rather than rebuilding a cursor of its own.
 
     Lazy — breaking out of the loop stops issuing requests, so a tool that has enough
     results never pays for the next page.
     """
-    token: str | None = None
+    token: str | None = start_token
     while True:
         page = await fetch_page(token)
         yield page
@@ -514,6 +536,25 @@ class YouTubeClient:
         channels = models.channels_from_api(await self._get("channels", params))
         return channels[0] if channels else None
 
+    async def list_playlist(
+        self,
+        playlist_id: str,
+        parts: Sequence[str] = ("snippet", "contentDetails"),
+    ) -> models.PlaylistInfo | None:
+        """`playlists.list` — shared pool, 1 unit. `None` when `items` comes back empty.
+
+        `privacyStatus` lives in `status`, which the default parts do not request, so
+        `PlaylistInfo.privacy_status` stays `None` unless the caller asks for it. An ID that
+        exists but is private is a 403 `playlistForbidden`, not an empty response.
+        """
+        if not playlist_id:
+            raise InvalidRequestError("list_playlist: playlist_id must not be empty")
+        self._quota.consume(QuotaBucket.SHARED)
+        playlists = models.playlists_from_api(
+            await self._get("playlists", {"part": _join_parts(parts), "id": playlist_id})
+        )
+        return playlists[0] if playlists else None
+
     async def list_playlist_items(
         self,
         playlist_id: str,
@@ -523,6 +564,8 @@ class YouTubeClient:
         page_token: str | None = None,
     ) -> models.PlaylistItemPage:
         """`playlistItems.list` — shared pool, 1 unit per page. No `contentDetails` part."""
+        if not playlist_id:
+            raise InvalidRequestError("list_playlist_items: playlist_id must not be empty")
         _check_range("max_results", max_results, 0, MAX_PLAYLIST_RESULTS)
         self._quota.consume(QuotaBucket.SHARED)
         raw = await self._get(

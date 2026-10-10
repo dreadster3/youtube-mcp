@@ -1,0 +1,28 @@
+{
+  "kind": "youtube#playlistListResponse",
+  "etag": "Xy2Za3Bc4De5Fg6Hi7Jk8Lm9No",
+  "pageInfo": { "totalResults": 1, "resultsPerPage": 5 },
+  "items": [
+    {
+      "kind": "youtube#playlist",
+      "etag": "Mn7Op8Qr9St0Uv1Wx2Yz3Ab4Cd",
+      "id": "PLx7I4zH7kz2Q4tU9mB0pX8aLw1Q",
+      "snippet": {
+        "publishedAt": "2021-03-15T09:12:00Z",
+        "channelId": "UCBR8-60-B28hp2BmDPdntcQ",
+        "title": "Android at Google I/O",
+        "description": "Recorded talks and demos from Google I/O.",
+        "thumbnails": {
+          "default": { "url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/default.jpg", "width": 120, "height": 90 }
+        },
+        "channelTitle": "Google Developers",
+        "localized": {
+          "title": "Android at Google I/O",
+          "description": "Recorded talks and demos from Google I/O."
+        }
+      },
+      "status": { "privacyStatus": "public" },
+      "contentDetails": { "itemCount": 120 }
+    }
+  ]
+}

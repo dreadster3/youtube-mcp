@@ -28,6 +28,7 @@ __all__ = [
     "Comment",
     "CommentThread",
     "CommentThreadPage",
+    "PlaylistInfo",
     "PlaylistItem",
     "PlaylistItemPage",
     "SearchResult",
@@ -207,12 +208,51 @@ class Channel(BaseModel):
         )
 
 
+class PlaylistInfo(BaseModel):
+    """A `playlists.list` item — the playlist's own metadata, not its videos.
+
+    `item_count` is YouTube's own `contentDetails.itemCount`, and `privacy_status`
+    (`public`/`unlisted`/`private`) comes from the `status` part, so it is `None` unless
+    that part was requested. `published_at` is when the *playlist* was created.
+    """
+
+    playlist_id: str
+    title: str = ""
+    description: str = ""
+    channel_id: str | None = None
+    channel_title: str | None = None
+    item_count: int | None = None
+    published_at: datetime | None = None
+    privacy_status: str | None = None
+
+    @classmethod
+    def from_api(cls, raw: Mapping[str, Any]) -> Self:
+        snippet = raw.get("snippet") or {}
+        details = raw.get("contentDetails") or {}
+        status = raw.get("status") or {}
+        return cls(
+            playlist_id=_as_text(raw.get("id")),
+            title=_as_text(snippet.get("title")),
+            description=_as_text(snippet.get("description")),
+            channel_id=snippet.get("channelId"),
+            channel_title=snippet.get("channelTitle"),
+            item_count=to_int(details.get("itemCount")),
+            published_at=_as_datetime(snippet.get("publishedAt")),
+            privacy_status=status.get("privacyStatus"),
+        )
+
+
 class PlaylistItem(BaseModel):
     """One `playlistItems.list` item.
 
     `item_id` is the *playlist-item* ID — a different namespace from `video_id`, which
     lives at `snippet.resourceId.videoId` (there is no `contentDetails` part on
     playlistItems; `video_published_at` arrives implicitly alongside `snippet`).
+
+    `published_at` is when the video was **added to this playlist** — a playlist keeps its
+    own order and its own add-dates, so it says nothing about when the video itself was
+    published to YouTube (`video_published_at` arrives implicitly with `snippet` when YouTube
+    includes it; treat as best-effort).
     """
 
     item_id: str
@@ -444,3 +484,7 @@ def videos_from_api(raw: Mapping[str, Any]) -> list[Video]:
 
 def channels_from_api(raw: Mapping[str, Any]) -> list[Channel]:
     return _items(raw, Channel.from_api)
+
+
+def playlists_from_api(raw: Mapping[str, Any]) -> list[PlaylistInfo]:
+    return _items(raw, PlaylistInfo.from_api)

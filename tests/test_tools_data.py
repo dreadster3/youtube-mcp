@@ -26,6 +26,7 @@ from youtube_mcp.youtube import models
 from youtube_mcp.youtube.client import (
     InvalidRequestError,
     NotFoundError,
+    PlaylistForbiddenError,
     QuotaExceededError,
     RateLimitedError,
     UpstreamError,
@@ -35,6 +36,7 @@ from youtube_mcp.youtube.quota import QuotaBucket, QuotaExceeded
 
 CHANNEL_ID = "UCBR8-60-B28hp2BmDPdntcQ"
 UPLOADS_ID = "UUBR8-60-B28hp2BmDPdntcQ"
+PLAYLIST_ID = "PLx7I4zH7kz2Q4tU9mB0pX8aLw1Q"
 
 _OPEN_CACHES: list[Cache] = []
 
@@ -650,6 +652,143 @@ async def test_list_channel_videos_reports_a_channel_without_uploads_playlist() 
     message = await call_error(mcp, "youtube_list_channel_videos", {"channel_id": CHANNEL_ID})
 
     assert "exposes no uploads playlist" in message
+
+
+# -------------------------------------------------------------------------- playlists
+
+
+def playlist_pages(pages: dict[str | None, models.PlaylistItemPage]) -> Any:
+    """Serve the scripted page for whichever `page_token` the walk asks with."""
+
+    def make_page(playlist_id: str, **kwargs: Any) -> models.PlaylistItemPage:
+        return pages[kwargs.get("page_token")]
+
+    return make_page
+
+
+async def test_get_playlist_returns_metadata_and_asks_for_status():
+    playlist = models.playlists_from_api(fixture("playlists_list.json"))[0]
+    mcp, stub = make_test_server(list_playlist=playlist)
+
+    result = await call_tool(mcp, "youtube_get_playlist", {"playlist_id": PLAYLIST_ID})
+
+    assert result["playlist_id"] == PLAYLIST_ID
+    assert result["title"] == "Android at Google I/O"
+    assert result["item_count"] == 120
+    assert result["privacy_status"] == "public"
+    assert stub.calls[0][0] == "list_playlist"
+    assert stub.kwargs()["playlist_id"] == PLAYLIST_ID
+    # `status` is where `privacyStatus` lives, so the tool must ask for it explicitly.
+    assert "status" in stub.kwargs()["parts"]
+
+
+async def test_get_playlist_id_miss_is_a_clean_error():
+    mcp, _ = make_test_server(list_playlist=None)
+
+    message = await call_error(mcp, "youtube_get_playlist", {"playlist_id": "PLnope"})
+
+    assert "no playlist found for id 'PLnope'" in message
+    assert "by name" in message  # discovery is a deliberate non-goal
+    assert "\n" not in message
+
+
+async def test_list_playlist_items_walks_a_paged_playlist_in_order():
+    """120 items over three pages: 50 + 50 + 20, driven by the opaque API token."""
+    mcp, stub = make_test_server(
+        list_playlist_items=playlist_pages(
+            {
+                None: playlist_page(50, "P2"),
+                "P2": playlist_page(50, "P3"),
+                "P3": playlist_page(20, None),
+            }
+        )
+    )
+
+    first = await call_tool(mcp, "youtube_list_playlist_items", {"playlist_id": PLAYLIST_ID})
+    second = await call_tool(
+        mcp,
+        "youtube_list_playlist_items",
+        {"playlist_id": PLAYLIST_ID, "page_token": first["next_page_token"]},
+    )
+    third = await call_tool(
+        mcp,
+        "youtube_list_playlist_items",
+        {"playlist_id": PLAYLIST_ID, "page_token": second["next_page_token"]},
+    )
+
+    assert [len(page["items"]) for page in (first, second, third)] == [50, 50, 20]
+    assert first["next_page_token"] == "P2"
+    assert second["next_page_token"] == "P3"
+    assert third["next_page_token"] is None
+    assert first["playlist_id"] == PLAYLIST_ID
+    assert second["items"][0]["position"] == 0  # the fixture item, in playlist order
+    assert len(stub.calls) == 3  # one shared-pool page per call, no wasted page
+    # The token goes back out exactly as received.
+    assert [call[1]["page_token"] for call in stub.calls] == [None, "P2", "P3"]
+    assert all(call[1]["max_results"] <= 50 for call in stub.calls)
+
+
+async def test_list_playlist_items_empty_playlist_is_not_an_error() -> None:
+    mcp, _ = make_test_server(list_playlist_items=models.PlaylistItemPage())
+
+    result = await call_tool(mcp, "youtube_list_playlist_items", {"playlist_id": PLAYLIST_ID})
+
+    assert result["items"] == []
+    assert result["next_page_token"] is None
+
+
+async def test_list_playlist_items_rejects_out_of_range_max_results() -> None:
+    mcp, stub = make_test_server(list_playlist_items=models.PlaylistItemPage())
+
+    message = await call_error(
+        mcp, "youtube_list_playlist_items", {"playlist_id": PLAYLIST_ID, "max_results": 51}
+    )
+
+    assert "less than or equal to 50" in message
+    assert stub.calls == []
+
+
+async def test_private_playlist_is_distinguishable_from_a_missing_one() -> None:
+    """Private must not read as missing, and neither may read as retriable."""
+    private, _ = make_test_server(
+        list_playlist_items=PlaylistForbiddenError(
+            "playlistItems: playlistForbidden (HTTP 403)", reason="playlistForbidden"
+        )
+    )
+    missing, _ = make_test_server(
+        list_playlist_items=NotFoundError(
+            "playlistItems: playlistNotFound (HTTP 404)", reason="playlistNotFound"
+        )
+    )
+
+    private_message = await call_error(
+        private, "youtube_list_playlist_items", {"playlist_id": PLAYLIST_ID}
+    )
+    missing_message = await call_error(
+        missing, "youtube_list_playlist_items", {"playlist_id": PLAYLIST_ID}
+    )
+
+    assert "private" in private_message
+    assert "[playlistForbidden]" in private_message
+    assert "retrying will not help" in private_message
+    assert "does not exist" in missing_message
+    assert private_message != missing_message
+    assert "\n" not in private_message
+
+
+async def test_unlistable_playlist_type_is_a_request_error_not_an_upstream_one() -> None:
+    """Watch-history playlists are a bad request for this endpoint, never a retriable 403."""
+    mcp, _ = make_test_server(
+        list_playlist_items=InvalidRequestError(
+            "playlistItems: playlistOperationUnsupported (HTTP 403)",
+            reason="playlistOperationUnsupported",
+        )
+    )
+
+    message = await call_error(mcp, "youtube_list_playlist_items", {"playlist_id": "WL"})
+
+    assert "rejected the request" in message
+    assert "failed upstream" not in message
 
 
 # ------------------------------------------------------------------------ categories

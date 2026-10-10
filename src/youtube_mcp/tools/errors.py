@@ -44,6 +44,10 @@ CLIENT_ERROR_MESSAGES: dict[type[client_module.YouTubeApiError], str] = {
         "comments are disabled on this video; that is final, not transient — do not ask for "
         "its comments again and do not retry"
     ),
+    client_module.PlaylistForbiddenError: (
+        "this playlist is private, so its contents cannot be read with an API key; a playlist "
+        "that is private stays private — retrying will not help"
+    ),
     client_module.InvalidRequestError: "the YouTube API rejected the request parameters",
     client_module.UpstreamError: (
         "the YouTube API call failed upstream (server error or transport failure)"
@@ -55,6 +59,7 @@ _CLIENT_ERROR_ORDER: tuple[type[client_module.YouTubeApiError], ...] = (
     client_module.QuotaExceededError,
     client_module.RateLimitedError,
     client_module.CommentsDisabledError,
+    client_module.PlaylistForbiddenError,
     client_module.NotFoundError,
     client_module.InvalidRequestError,
     client_module.UpstreamError,

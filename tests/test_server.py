@@ -49,6 +49,8 @@ EXPECTED_TOOLS = {
     "youtube_get_comment_replies",
     "youtube_get_channel",
     "youtube_list_channel_videos",
+    "youtube_get_playlist",
+    "youtube_list_playlist_items",
     "youtube_list_categories",
     "youtube_get_quota_status",
 }
@@ -76,7 +78,7 @@ def resources(settings: Settings) -> ServerResources:
 # ------------------------------------------------------------------------ tool surface
 
 
-async def test_tools_list_exposes_exactly_the_thirteen_namespaced_tools(
+async def test_tools_list_exposes_exactly_the_fifteen_namespaced_tools(
     settings: Settings, resources: ServerResources
 ) -> None:
     mcp = build_mcp(settings, resources)
@@ -116,6 +118,11 @@ async def test_every_tool_has_a_substantive_description(
         ("youtube_get_comment_replies", "shared"),
         ("youtube_get_comment_replies", "full"),
         ("youtube_list_channel_videos", "shared"),
+        ("youtube_get_playlist", "shared"),
+        ("youtube_get_playlist", "no lookup by name"),
+        ("youtube_list_playlist_items", "shared"),
+        ("youtube_list_playlist_items", "added to this playlist"),
+        ("youtube_list_playlist_items", "opaque"),
         ("youtube_list_categories", "shared"),
         ("youtube_get_transcript", "no YouTube Data API quota"),
         ("youtube_get_transcript", "machine translation"),
