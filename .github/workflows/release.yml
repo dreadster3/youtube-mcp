@@ -237,6 +237,13 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
+      # The runner is amd64, so buildx runs the arm64 leg under QEMU, which this action registers
+      # (binfmt) on the host — buildx does not install it. Must precede setup-buildx: the builder
+      # picks binfmt up at boot. Only the Dockerfile's RUN steps are emulated, and they compile
+      # nothing: every locked dependency ships an aarch64 wheel (checked in uv.lock) and both
+      # pinned base images are multiarch indexes.
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
       # Sets up BuildKit, which `docker/build-push-action` needs for the cache configuration below
       # to take effect.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -279,10 +286,11 @@ jobs:
           context: .
           file: deploy/Dockerfile
           push: true
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # GHA cache keeps the uv sync layer warm between releases; `ignore-error` so a cache
-          # outage cannot fail an otherwise good release.
+          # outage cannot fail an otherwise good release. `type=gha` keys entries per platform,
+          # so both arches get their own cache — nothing to change for the added arm64 leg.
           cache-from: type=gha
           cache-to: type=gha,mode=max,ignore-error=true
