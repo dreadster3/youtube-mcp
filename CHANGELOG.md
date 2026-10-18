@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/dreadster3/youtube-mcp/compare/v0.3.0...v0.4.0) (2026-10-18)
+
+
+### Documentation
+
+* **readme:** use uvx for mcp client config ([#35](https://github.com/dreadster3/youtube-mcp/issues/35)) ([3ab5678](https://github.com/dreadster3/youtube-mcp/commit/3ab567858afa2bcf95d6f81815791ae858098c07))
+
+
+### Miscellaneous Chores
+
+* **deps:** update dependency fastmcp to v4.1.1 ([#33](https://github.com/dreadster3/youtube-mcp/issues/33)) ([4274a52](https://github.com/dreadster3/youtube-mcp/commit/4274a52a389babf649f5a44e733ed80930919dae))
+
 ## [0.3.0](https://github.com/dreadster3/youtube-mcp/compare/v0.2.0...v0.3.0) (2026-10-10)
 
 
