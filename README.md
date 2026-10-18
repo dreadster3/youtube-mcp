@@ -27,14 +27,15 @@ export YOUTUBE_API_KEY=...    # required — the server fails fast without it
 uv run youtube-mcp            # speaks MCP on stdin/stdout
 ```
 
-Point an MCP client at it:
+Point an MCP client at the published package — `uvx` fetches it from PyPI, so no local
+checkout is needed:
 
 ```json
 {
   "mcpServers": {
     "youtube": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/youtube-mcp", "youtube-mcp"],
+      "command": "uvx",
+      "args": ["--from", "dreadster3-youtube-mcp", "youtube-mcp"],
       "env": { "YOUTUBE_API_KEY": "your-key-here" }
     }
   }
