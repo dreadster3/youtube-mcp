@@ -11,7 +11,7 @@
 # --- Stage 1: builder -------------------------------------------------------------------
 # Same minor as `.python-version`, so uv resolves the base interpreter rather than
 # downloading one. uv itself never reaches the runtime stage.
-FROM python:3.14-slim@sha256:35caba83af2fe6da9a5d922f9b0156f21d1246a48278c58a08bd253303ba42e8 AS builder
+FROM python:3.15-slim@sha256:533b0b2f9b5d46fd097091cf826f27902f1d6c3bca714b6dc74551356aa97a51 AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff /uv /uvx /bin/
 
@@ -30,7 +30,7 @@ RUN uv venv /app/.venv \
  && uv sync --frozen --no-dev --compile-bytecode
 
 # --- Stage 2: runtime -------------------------------------------------------------------
-FROM python:3.14-slim@sha256:35caba83af2fe6da9a5d922f9b0156f21d1246a48278c58a08bd253303ba42e8 AS runtime
+FROM python:3.15-slim@sha256:533b0b2f9b5d46fd097091cf826f27902f1d6c3bca714b6dc74551356aa97a51 AS runtime
 
 # Non-root by default. The ids are build args so the cluster can pin them if it needs to.
 ARG APP_UID=10001
