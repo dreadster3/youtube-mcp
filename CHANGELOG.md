@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/dreadster3/youtube-mcp/compare/v0.4.0...v0.5.0) (2026-10-24)
+
+
+### Features
+
+* **release:** build image for linux/arm64 ([#36](https://github.com/dreadster3/youtube-mcp/issues/36)) ([70824f6](https://github.com/dreadster3/youtube-mcp/commit/70824f6e9eb82545027b4e08a101e60d1d6e0fe4))
+
 ## [0.4.0](https://github.com/dreadster3/youtube-mcp/compare/v0.3.0...v0.4.0) (2026-10-18)
 
 
